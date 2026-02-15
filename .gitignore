@@ -34,4 +34,5 @@ go.work.sum
 # Overthink build artifacts
 .build/
 bin/
+ov/ov
 output/
