@@ -4,7 +4,12 @@
     "tag": "auto",
     "base": "fedora:43",
     "platforms": ["linux/amd64", "linux/arm64"],
-    "pkg": "rpm"
+    "pkg": "rpm",
+    "merge": {
+      "auto": true,
+      "min_mb": 256,
+      "max_mb": 512
+    }
   },
   "images": {
     "fedora": {

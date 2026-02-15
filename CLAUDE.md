@@ -68,7 +68,12 @@ An **image** is a named build target in `build.json`. The current configuration:
     "tag": "auto",
     "base": "fedora:43",
     "platforms": ["linux/amd64", "linux/arm64"],
-    "pkg": "rpm"
+    "pkg": "rpm",
+    "merge": {
+      "auto": true,
+      "min_mb": 256,
+      "max_mb": 512
+    }
   },
   "images": {
     "fedora": {
@@ -110,7 +115,7 @@ Every setting resolves through: **image -> defaults -> hardcoded fallback** (fir
 | `user` | `"user"` | Username for non-root operations |
 | `uid` | `1000` | User ID |
 | `gid` | `1000` | Group ID |
-| `merge` | `null` | Layer merge settings (`{"min_mb": 100, "max_mb": 1024}`). See [Layer Merging](#layer-merging). |
+| `merge` | `null` | Layer merge settings (`{"auto": true, "min_mb": 100, "max_mb": 1024}`). See [Layer Merging](#layer-merging). |
 
 When `base` references another image in `build.json`, the generator resolves it to the full registry/tag and creates a build dependency. The referenced image must be built first.
 
@@ -266,6 +271,7 @@ ov list services                       # Layers with supervisord.conf
 ov list routes                         # Layers with route files (host + port)
 ov merge <image> [--min-mb N] [--max-mb N] [--tag TAG] [--dry-run]
                                        # Merge small layers in a built image
+ov merge --all [--dry-run]             # Merge all images with merge.auto enabled
 ov new layer <name>                    # Scaffold a layer directory
 ov shell <image> [-w PATH] [--tag TAG] # Bash shell in a container (mounts cwd at /workspace)
 ov start <image> [-w PATH] [--tag TAG] # Start service container with supervisord (detached)
@@ -340,8 +346,8 @@ project/
 |---|---|
 | `task setup:all` | Build `ov` + create buildx builder |
 | `task build:ov` | `go build` -> `bin/ov` |
-| `task build:all` | `ov generate` -> `docker buildx bake` |
-| `task build:local -- <image>` | Build for host platform only |
+| `task build:all` | `ov generate` -> `docker buildx bake` -> `ov merge --all` |
+| `task build:local -- <image>` | Build for host platform only -> `ov merge --all` |
 | `task build:push` | Build and push all images |
 | `task build:merge -- <image>` | Merge small layers in a built image |
 | `task run:container -- <image>` | `docker run` |
@@ -407,6 +413,7 @@ Add `merge` to `build.json` defaults or per-image:
 {
   "defaults": {
     "merge": {
+      "auto": true,
       "min_mb": 100,
       "max_mb": 1024
     }
@@ -414,10 +421,11 @@ Add `merge` to `build.json` defaults or per-image:
 }
 ```
 
+- **`auto`**: Enable automatic merging after builds via `ov merge --all` (default: false)
 - **`min_mb`**: Layers smaller than this (MB) are merge candidates (default: 100)
 - **`max_mb`**: Maximum size of a merged layer (MB) (default: 1024)
 
-CLI flags (`--min-mb`, `--max-mb`) override `build.json` values.
+CLI flags (`--min-mb`, `--max-mb`) override `build.json` values. The `auto` field is only used by `ov merge --all` to select which images to merge; `ov merge <image>` always merges regardless.
 
 ### Algorithm
 
@@ -437,8 +445,11 @@ Source: `ov/merge.go`. Uses `docker save`/`docker load` via `os/exec` (same patt
 # Preview what would be merged
 ov merge fedora --dry-run
 
-# Merge with defaults (min_mb=100, max_mb=1024)
+# Merge a single image
 ov merge fedora
+
+# Merge all images with merge.auto enabled (used by build tasks)
+ov merge --all
 
 # Custom thresholds
 ov merge fedora --min-mb 50 --max-mb 512
@@ -446,6 +457,8 @@ ov merge fedora --min-mb 50 --max-mb 512
 # Specific tag
 ov merge fedora --tag 2026.46.1415
 ```
+
+When `merge.auto` is set in `build.json` defaults, `task build:all` and `task build:local` automatically run `ov merge --all` after the build completes.
 
 Merge is idempotent -- running again after merging shows all layers as `[keep]`.
 

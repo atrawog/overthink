@@ -18,7 +18,8 @@ import (
 
 // MergeCmd merges small layers in a built container image
 type MergeCmd struct {
-	Image  string `arg:"" help:"Image name from build.json"`
+	Image  string `arg:"" optional:"" help:"Image name from build.json"`
+	All    bool   `long:"all" help:"Merge all images with merge.auto enabled"`
 	MinMB  int    `long:"min-mb" help:"Layers smaller than this (MB) are merge candidates"`
 	MaxMB  int    `long:"max-mb" help:"Maximum size of a merged layer (MB)"`
 	Tag    string `long:"tag" default:"latest" help:"Image tag to use (default: latest)"`
@@ -37,6 +38,10 @@ const (
 )
 
 func (c *MergeCmd) Run() error {
+	if c.Image == "" && !c.All {
+		return fmt.Errorf("specify an image name or use --all")
+	}
+
 	dir, err := os.Getwd()
 	if err != nil {
 		return err
@@ -47,7 +52,47 @@ func (c *MergeCmd) Run() error {
 		return err
 	}
 
-	resolved, err := cfg.ResolveImage(c.Image, "unused")
+	if c.All {
+		return c.runAll(cfg)
+	}
+	return c.runOne(cfg, c.Image)
+}
+
+// runAll merges all images that have merge.auto enabled.
+func (c *MergeCmd) runAll(cfg *Config) error {
+	images, err := cfg.ResolveAllImages("unused")
+	if err != nil {
+		return err
+	}
+
+	// Merge in dependency order so base images are merged before children
+	order, err := ResolveImageOrder(images)
+	if err != nil {
+		return err
+	}
+
+	merged := 0
+	for _, name := range order {
+		resolved := images[name]
+		if resolved.Merge == nil || !resolved.Merge.Auto {
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "\n--- %s ---\n", name)
+		if err := c.runOne(cfg, name); err != nil {
+			return fmt.Errorf("merging %s: %w", name, err)
+		}
+		merged++
+	}
+
+	if merged == 0 {
+		fmt.Fprintf(os.Stderr, "No images have merge.auto enabled\n")
+	}
+	return nil
+}
+
+// runOne merges a single image.
+func (c *MergeCmd) runOne(cfg *Config, imageName string) error {
+	resolved, err := cfg.ResolveImage(imageName, "unused")
 	if err != nil {
 		return err
 	}
