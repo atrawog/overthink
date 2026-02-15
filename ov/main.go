@@ -227,8 +227,11 @@ type NewLayerCmd struct {
 }
 
 func (c *NewLayerCmd) Run() error {
-	// TODO: implement in scaffold.go
-	return fmt.Errorf("not implemented yet")
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	return ScaffoldLayer(dir, c.Name)
 }
 
 // VersionCmd prints the computed CalVer tag
