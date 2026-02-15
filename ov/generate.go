@@ -338,8 +338,14 @@ func (g *Generator) writeLayerEnv(b *strings.Builder, layerOrder []string, img *
 		b.WriteString("# Layer environment variables\n")
 	}
 
-	for key, value := range expanded.Vars {
-		b.WriteString(fmt.Sprintf("ENV %s=\"%s\"\n", key, value))
+	// Sort keys for deterministic output (prevents Docker cache invalidation)
+	keys := make([]string, 0, len(expanded.Vars))
+	for key := range expanded.Vars {
+		keys = append(keys, key)
+	}
+	sortStrings(keys)
+	for _, key := range keys {
+		b.WriteString(fmt.Sprintf("ENV %s=\"%s\"\n", key, expanded.Vars[key]))
 	}
 
 	// Append to PATH if there are path additions
