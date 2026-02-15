@@ -7,16 +7,17 @@
     "pkg": "rpm"
   },
   "images": {
-    "base": {
-      "layers": ["pixi", "python"]
+    "fedora": {
+      "layers": ["pixi", "python", "nodejs", "rust", "supervisord"]
     },
-    "dev": {
-      "base": "base",
-      "layers": ["nodejs", "rust"]
-    },
-    "ubuntu-base": {
+    "ubuntu": {
       "base": "ubuntu:24.04",
-      "layers": ["pixi", "python", "nodejs"],
+      "layers": ["pixi", "python", "nodejs", "rust", "supervisord"],
+      "pkg": "deb"
+    },
+    "debian": {
+      "base": "debian:13",
+      "layers": ["pixi", "python", "nodejs", "rust", "supervisord"],
       "pkg": "deb"
     }
   }
