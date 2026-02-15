@@ -1,6 +1,10 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+
 	"github.com/alecthomas/kong"
 )
 
@@ -20,16 +24,39 @@ type GenerateCmd struct {
 }
 
 func (c *GenerateCmd) Run() error {
-	// TODO: implement
-	return nil
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	gen, err := NewGenerator(dir, c.Tag)
+	if err != nil {
+		return err
+	}
+
+	return gen.Generate()
 }
 
 // ValidateCmd validates build.json and layers
 type ValidateCmd struct{}
 
 func (c *ValidateCmd) Run() error {
-	// TODO: implement
-	return nil
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		return err
+	}
+
+	layers, err := ScanLayers(dir)
+	if err != nil {
+		return err
+	}
+
+	return Validate(cfg, layers)
 }
 
 // InspectCmd prints resolved config for an image
@@ -39,7 +66,53 @@ type InspectCmd struct {
 }
 
 func (c *InspectCmd) Run() error {
-	// TODO: implement
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		return err
+	}
+
+	calverTag := ComputeCalVer()
+	resolved, err := cfg.ResolveImage(c.Image, calverTag)
+	if err != nil {
+		return err
+	}
+
+	if c.Format != "" {
+		// Output single field
+		switch c.Format {
+		case "tag":
+			fmt.Println(resolved.FullTag)
+		case "base":
+			fmt.Println(resolved.Base)
+		case "pkg":
+			fmt.Println(resolved.Pkg)
+		case "registry":
+			fmt.Println(resolved.Registry)
+		case "platforms":
+			for _, p := range resolved.Platforms {
+				fmt.Println(p)
+			}
+		case "layers":
+			for _, l := range resolved.Layers {
+				fmt.Println(l)
+			}
+		default:
+			return fmt.Errorf("unknown format field: %s", c.Format)
+		}
+		return nil
+	}
+
+	// Output full JSON
+	data, err := json.MarshalIndent(resolved, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(data))
 	return nil
 }
 
@@ -55,7 +128,19 @@ type ListCmd struct {
 type ListImagesCmd struct{}
 
 func (c *ListImagesCmd) Run() error {
-	// TODO: implement
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range cfg.ImageNames() {
+		fmt.Println(name)
+	}
 	return nil
 }
 
@@ -63,7 +148,19 @@ func (c *ListImagesCmd) Run() error {
 type ListLayersCmd struct{}
 
 func (c *ListLayersCmd) Run() error {
-	// TODO: implement
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	layers, err := ScanLayers(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range LayerNames(layers) {
+		fmt.Println(name)
+	}
 	return nil
 }
 
@@ -71,7 +168,30 @@ func (c *ListLayersCmd) Run() error {
 type ListTargetsCmd struct{}
 
 func (c *ListTargetsCmd) Run() error {
-	// TODO: implement
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		return err
+	}
+
+	calverTag := ComputeCalVer()
+	images, err := cfg.ResolveAllImages(calverTag)
+	if err != nil {
+		return err
+	}
+
+	order, err := ResolveImageOrder(images)
+	if err != nil {
+		return err
+	}
+
+	for _, name := range order {
+		fmt.Println(name)
+	}
 	return nil
 }
 
@@ -79,7 +199,20 @@ func (c *ListTargetsCmd) Run() error {
 type ListServicesCmd struct{}
 
 func (c *ListServicesCmd) Run() error {
-	// TODO: implement
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	layers, err := ScanLayers(dir)
+	if err != nil {
+		return err
+	}
+
+	services := ServiceLayers(layers)
+	for _, layer := range services {
+		fmt.Println(layer.Name)
+	}
 	return nil
 }
 
@@ -94,8 +227,8 @@ type NewLayerCmd struct {
 }
 
 func (c *NewLayerCmd) Run() error {
-	// TODO: implement
-	return nil
+	// TODO: implement in scaffold.go
+	return fmt.Errorf("not implemented yet")
 }
 
 // VersionCmd prints the computed CalVer tag

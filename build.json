@@ -8,34 +8,15 @@
   },
   "images": {
     "base": {
-      "layers": ["pixi"]
+      "layers": ["pixi", "python"]
     },
-    "cuda": {
-      "layers": ["pixi", "cuda"],
-      "platforms": ["linux/amd64"]
+    "dev": {
+      "base": "base",
+      "layers": ["nodejs", "rust"]
     },
-    "ml-cuda": {
-      "base": "cuda",
-      "layers": ["python", "ml-libs"]
-    },
-    "inference": {
-      "base": "ml-cuda",
-      "layers": ["supervisord", "ollama", "vllm"],
-      "tag": "nightly"
-    },
-    "full-stack": {
-      "base": "ml-cuda",
-      "layers": ["supervisord", "ollama", "vllm", "redis"]
-    },
-    "bazzite": {
-      "base": "ghcr.io/ublue-os/bazzite:stable",
-      "bootc": true,
-      "layers": ["custom-packages"],
-      "platforms": ["linux/amd64"]
-    },
-    "ubuntu-dev": {
+    "ubuntu-base": {
       "base": "ubuntu:24.04",
-      "layers": ["pixi", "nodejs", "dev-tools"],
+      "layers": ["pixi", "python", "nodejs"],
       "pkg": "deb"
     }
   }
