@@ -104,6 +104,10 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		return err
 	}
 
+	// ARG for base image must come first (before any FROM)
+	resolvedBase := g.resolveBaseImage(img)
+	b.WriteString(fmt.Sprintf("ARG BASE_IMAGE=%s\n\n", resolvedBase))
+
 	// Emit scratch stages for each layer
 	for _, layerName := range layerOrder {
 		b.WriteString(fmt.Sprintf("FROM scratch AS %s\n", layerName))
@@ -134,8 +138,6 @@ func (g *Generator) generateContainerfile(imageName string) error {
 	}
 
 	// Main image
-	resolvedBase := g.resolveBaseImage(img)
-	b.WriteString(fmt.Sprintf("ARG BASE_IMAGE=%s\n", resolvedBase))
 	b.WriteString("FROM ${BASE_IMAGE}\n\n")
 
 	// Bootstrap preamble (only for external base images)
@@ -203,9 +205,10 @@ func (g *Generator) writeBootstrap(b *strings.Builder, pkg string) {
 	b.WriteString("RUN id -u user >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash user\n\n")
 
 	// Environment
+	b.WriteString("ENV PIXI_HOME=\"/opt/pixi\"\n")
 	b.WriteString("ENV NPM_CONFIG_PREFIX=\"/home/user/.npm-global\"\n")
 	b.WriteString("ENV npm_config_cache=\"/home/user/.cache/npm\"\n")
-	b.WriteString("ENV PATH=\"/home/user/.npm-global/bin:/home/user/.cargo/bin:/home/user/.pixi/envs/default/bin:${PATH}\"\n")
+	b.WriteString("ENV PATH=\"/home/user/.pixi/envs/default/bin:/home/user/.npm-global/bin:/home/user/.cargo/bin:/opt/pixi/bin:${PATH}\"\n")
 	b.WriteString("WORKDIR /home/user\n\n")
 }
 
@@ -325,7 +328,7 @@ func (g *Generator) writeRootYml(b *strings.Builder, layerName string, pkg strin
 func (g *Generator) writePixiToml(b *strings.Builder, layerName string) {
 	b.WriteString(fmt.Sprintf("RUN --mount=type=bind,from=%s,source=/,target=/ctx \\\n", layerName))
 	b.WriteString("    --mount=type=cache,dst=/home/user/.cache/rattler,uid=1000,gid=1000 \\\n")
-	b.WriteString("    cd /home/user && pixi add --manifest-path /ctx/pixi.toml\n")
+	b.WriteString("    cp /ctx/pixi.toml /home/user/pixi.toml && pixi install\n")
 }
 
 func (g *Generator) writePackageJson(b *strings.Builder, layerName string) {
