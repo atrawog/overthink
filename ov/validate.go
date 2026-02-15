@@ -310,14 +310,8 @@ func validateMergeConfig(cfg *Config, errs *ValidationError) {
 		if m == nil {
 			return
 		}
-		if m.MinMB < 0 {
-			errs.Add("%s: merge min_mb must be > 0, got %d", name, m.MinMB)
-		}
 		if m.MaxMB < 0 {
 			errs.Add("%s: merge max_mb must be > 0, got %d", name, m.MaxMB)
-		}
-		if m.MinMB > 0 && m.MaxMB > 0 && m.MaxMB < m.MinMB {
-			errs.Add("%s: merge max_mb (%d) must be >= min_mb (%d)", name, m.MaxMB, m.MinMB)
 		}
 	}
 

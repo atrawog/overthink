@@ -71,8 +71,7 @@ An **image** is a named build target in `build.json`. The current configuration:
     "pkg": "rpm",
     "merge": {
       "auto": true,
-      "min_mb": 256,
-      "max_mb": 512
+      "max_mb": 128
     }
   },
   "images": {
@@ -115,7 +114,7 @@ Every setting resolves through: **image -> defaults -> hardcoded fallback** (fir
 | `user` | `"user"` | Username for non-root operations |
 | `uid` | `1000` | User ID |
 | `gid` | `1000` | Group ID |
-| `merge` | `null` | Layer merge settings (`{"auto": true, "min_mb": 100, "max_mb": 1024}`). See [Layer Merging](#layer-merging). |
+| `merge` | `null` | Layer merge settings (`{"auto": true, "max_mb": 128}`). See [Layer Merging](#layer-merging). |
 
 When `base` references another image in `build.json`, the generator resolves it to the full registry/tag and creates a build dependency. The referenced image must be built first.
 
@@ -269,7 +268,7 @@ ov list layers                         # Layers from filesystem
 ov list targets                        # Bake targets from generated HCL
 ov list services                       # Layers with supervisord.conf
 ov list routes                         # Layers with route files (host + port)
-ov merge <image> [--min-mb N] [--max-mb N] [--tag TAG] [--dry-run]
+ov merge <image> [--max-mb N] [--tag TAG] [--dry-run]
                                        # Merge small layers in a built image
 ov merge --all [--dry-run]             # Merge all images with merge.auto enabled
 ov new layer <name>                    # Scaffold a layer directory
@@ -283,7 +282,7 @@ ov version                             # Print computed CalVer tag
 
 **Error handling:** validation collects all errors at once. Exit codes: 0 = success, 1 = validation/user error, 2 = internal error.
 
-**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `copr.repo` requires `rpm.list`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `env` files must use `PATH+=` not `PATH=`, `ports` files must contain valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `route` files must have both `host` and `port` (valid number), images with route layers must include traefik, `merge.min_mb` must be > 0, `merge.max_mb` must be >= `merge.min_mb`.
+**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `copr.repo` requires `rpm.list`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `env` files must use `PATH+=` not `PATH=`, `ports` files must contain valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `route` files must have both `host` and `port` (valid number), images with route layers must include traefik, `merge.max_mb` must be > 0.
 
 ---
 
@@ -414,25 +413,23 @@ Add `merge` to `build.json` defaults or per-image:
   "defaults": {
     "merge": {
       "auto": true,
-      "min_mb": 100,
-      "max_mb": 1024
+      "max_mb": 128
     }
   }
 }
 ```
 
 - **`auto`**: Enable automatic merging after builds via `ov merge --all` (default: false)
-- **`min_mb`**: Layers smaller than this (MB) are merge candidates (default: 100)
-- **`max_mb`**: Maximum size of a merged layer (MB) (default: 1024)
+- **`max_mb`**: Maximum size of a merged layer (MB) (default: 128)
 
-CLI flags (`--min-mb`, `--max-mb`) override `build.json` values. The `auto` field is only used by `ov merge --all` to select which images to merge; `ov merge <image>` always merges regardless.
+CLI flag `--max-mb` overrides `build.json`. The `auto` field is only used by `ov merge --all` to select which images to merge; `ov merge <image>` always merges regardless.
 
 ### Algorithm
 
 1. Load image from Docker daemon via `docker save` -> `tarball.ImageFromPath()`
 2. Get compressed sizes via `layer.Size()`
-3. Group consecutive layers where each is < `min_mb` into groups totaling <= `max_mb`
-4. Single-layer "groups" are not merged (need 2+ consecutive candidates)
+3. Group consecutive layers into groups totaling <= `max_mb`
+4. Single-layer "groups" are kept as-is (need 2+ layers to merge)
 5. For each merge group: read uncompressed tarballs, deduplicate entries by path (last writer wins), write combined tar into a single new layer
 6. Reconstruct image with `mutate.Append()`, preserving OCI history alignment (empty-layer entries for ENV/USER/EXPOSE kept in correct positions)
 7. Save via `tarball.WriteToFile()` -> `docker load`
@@ -451,8 +448,8 @@ ov merge fedora
 # Merge all images with merge.auto enabled (used by build tasks)
 ov merge --all
 
-# Custom thresholds
-ov merge fedora --min-mb 50 --max-mb 512
+# Custom threshold
+ov merge fedora --max-mb 512
 
 # Specific tag
 ov merge fedora --tag 2026.46.1415

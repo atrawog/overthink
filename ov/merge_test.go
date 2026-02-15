@@ -14,28 +14,10 @@ import (
 
 const mb = 1024 * 1024
 
-// TestPlanMerge_AllLarge verifies no merging when all layers exceed min_mb.
-func TestPlanMerge_AllLarge(t *testing.T) {
-	sizes := []int64{200 * mb, 150 * mb, 300 * mb}
-	steps := planMerge(sizes, 100*mb, 1024*mb)
-
-	if len(steps) != 3 {
-		t.Fatalf("expected 3 steps, got %d", len(steps))
-	}
-	for i, step := range steps {
-		if !step.Keep {
-			t.Errorf("step %d: expected Keep=true", i)
-		}
-		if len(step.Layers) != 1 || step.Layers[0] != i {
-			t.Errorf("step %d: expected Layers=[%d], got %v", i, i, step.Layers)
-		}
-	}
-}
-
-// TestPlanMerge_AllSmall verifies grouping of all-small layers.
-func TestPlanMerge_AllSmall(t *testing.T) {
+// TestPlanMerge_AllFitOneGroup verifies all layers merge into one group when they fit.
+func TestPlanMerge_AllFitOneGroup(t *testing.T) {
 	sizes := []int64{10 * mb, 20 * mb, 30 * mb, 15 * mb}
-	steps := planMerge(sizes, 100*mb, 1024*mb)
+	steps := planMerge(sizes, 1024*mb)
 
 	if len(steps) != 1 {
 		t.Fatalf("expected 1 step (merged group), got %d", len(steps))
@@ -48,47 +30,12 @@ func TestPlanMerge_AllSmall(t *testing.T) {
 	}
 }
 
-// TestPlanMerge_Mixed verifies large layers break merge runs.
-func TestPlanMerge_Mixed(t *testing.T) {
-	sizes := []int64{10 * mb, 20 * mb, 200 * mb, 5 * mb, 15 * mb}
-	steps := planMerge(sizes, 100*mb, 1024*mb)
-
-	// Expected: merge(0,1), keep(2), merge(3,4)
-	if len(steps) != 3 {
-		t.Fatalf("expected 3 steps, got %d", len(steps))
-	}
-
-	// First: merge group [0, 1]
-	if steps[0].Keep {
-		t.Error("step 0: expected Keep=false")
-	}
-	if len(steps[0].Layers) != 2 || steps[0].Layers[0] != 0 || steps[0].Layers[1] != 1 {
-		t.Errorf("step 0: expected Layers=[0,1], got %v", steps[0].Layers)
-	}
-
-	// Second: keep layer 2
-	if !steps[1].Keep {
-		t.Error("step 1: expected Keep=true")
-	}
-	if steps[1].Layers[0] != 2 {
-		t.Errorf("step 1: expected Layers=[2], got %v", steps[1].Layers)
-	}
-
-	// Third: merge group [3, 4]
-	if steps[2].Keep {
-		t.Error("step 2: expected Keep=false")
-	}
-	if len(steps[2].Layers) != 2 || steps[2].Layers[0] != 3 || steps[2].Layers[1] != 4 {
-		t.Errorf("step 2: expected Layers=[3,4], got %v", steps[2].Layers)
-	}
-}
-
-// TestPlanMerge_MaxMBLimit verifies group split when max_mb is exceeded.
-func TestPlanMerge_MaxMBLimit(t *testing.T) {
+// TestPlanMerge_MaxMBSplit verifies group splits when max_mb is exceeded.
+func TestPlanMerge_MaxMBSplit(t *testing.T) {
 	sizes := []int64{40 * mb, 40 * mb, 40 * mb, 40 * mb}
-	steps := planMerge(sizes, 100*mb, 100*mb) // max=100MB
+	steps := planMerge(sizes, 100*mb) // max=100MB
 
-	// First three: 40+40=80 fits, 80+40=120 doesn't -> group [0,1], then [2,3]
+	// 40+40=80 fits, 80+40=120 doesn't -> group [0,1], then [2,3]
 	if len(steps) != 2 {
 		t.Fatalf("expected 2 steps, got %d", len(steps))
 	}
@@ -100,19 +47,41 @@ func TestPlanMerge_MaxMBLimit(t *testing.T) {
 	}
 }
 
-// TestPlanMerge_SingleSmall verifies a single small layer is kept as-is (no single-layer merge).
-func TestPlanMerge_SingleSmall(t *testing.T) {
-	sizes := []int64{200 * mb, 10 * mb, 300 * mb}
-	steps := planMerge(sizes, 100*mb, 1024*mb)
+// TestPlanMerge_LargeLayerAlone verifies a layer exceeding max_mb stays alone.
+func TestPlanMerge_LargeLayerAlone(t *testing.T) {
+	sizes := []int64{10 * mb, 300 * mb, 20 * mb}
+	steps := planMerge(sizes, 256*mb)
 
+	// 10 fits, 10+300=310 > 256 -> flush [0] (single, kept), 300 alone (kept), 20 alone (kept)
 	if len(steps) != 3 {
 		t.Fatalf("expected 3 steps, got %d", len(steps))
 	}
-	// Layer 1 (10MB) is small but alone between large layers -> kept
 	for _, step := range steps {
 		if !step.Keep {
-			t.Errorf("expected all steps to be Keep=true, got merge for %v", step.Layers)
+			t.Errorf("expected all steps to be Keep=true (single-layer groups), got merge for %v", step.Layers)
 		}
+	}
+}
+
+// TestPlanMerge_MixedSizes verifies grouping with varied sizes.
+func TestPlanMerge_MixedSizes(t *testing.T) {
+	sizes := []int64{50 * mb, 50 * mb, 50 * mb, 200 * mb, 30 * mb, 30 * mb}
+	steps := planMerge(sizes, 200*mb)
+
+	// 50+50+50=150 fits, 150+200=350 doesn't -> merge [0,1,2]
+	// 200 alone (kept), 200+30=230 doesn't -> flush [3] (kept)
+	// 30+30=60 fits -> merge [4,5]
+	if len(steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(steps))
+	}
+	if steps[0].Keep || len(steps[0].Layers) != 3 {
+		t.Errorf("step 0: expected merge of 3 layers, got Keep=%v Layers=%v", steps[0].Keep, steps[0].Layers)
+	}
+	if !steps[1].Keep {
+		t.Error("step 1: expected Keep=true for 200MB layer")
+	}
+	if steps[2].Keep || len(steps[2].Layers) != 2 {
+		t.Errorf("step 2: expected merge of 2 layers, got Keep=%v Layers=%v", steps[2].Keep, steps[2].Layers)
 	}
 }
 
@@ -276,7 +245,7 @@ func TestHistoryAlignment(t *testing.T) {
 	}
 
 	// All layers are tiny, so they should all merge
-	steps := planMerge(sizes, 100*mb, 1024*mb)
+	steps := planMerge(sizes, 1024*mb)
 
 	// All 3 layers are small -> one merge group
 	if len(steps) != 1 || steps[0].Keep {

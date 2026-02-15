@@ -20,7 +20,6 @@ import (
 type MergeCmd struct {
 	Image  string `arg:"" optional:"" help:"Image name from build.json"`
 	All    bool   `long:"all" help:"Merge all images with merge.auto enabled"`
-	MinMB  int    `long:"min-mb" help:"Layers smaller than this (MB) are merge candidates"`
 	MaxMB  int    `long:"max-mb" help:"Maximum size of a merged layer (MB)"`
 	Tag    string `long:"tag" default:"latest" help:"Image tag to use (default: latest)"`
 	DryRun bool   `long:"dry-run" help:"Print merge plan without modifying the image"`
@@ -32,10 +31,7 @@ type MergeStep struct {
 	Layers []int // indices into the original layer list
 }
 
-const (
-	defaultMinMB = 100
-	defaultMaxMB = 1024
-)
+const defaultMaxMB = 128
 
 func (c *MergeCmd) Run() error {
 	if c.Image == "" && !c.All {
@@ -97,25 +93,15 @@ func (c *MergeCmd) runOne(cfg *Config, imageName string) error {
 		return err
 	}
 
-	// Determine min/max: CLI flags -> build.json -> defaults
-	minMB := defaultMinMB
+	// Determine max_mb: CLI flags -> build.json -> default
 	maxMB := defaultMaxMB
-	if resolved.Merge != nil {
-		if resolved.Merge.MinMB > 0 {
-			minMB = resolved.Merge.MinMB
-		}
-		if resolved.Merge.MaxMB > 0 {
-			maxMB = resolved.Merge.MaxMB
-		}
-	}
-	if c.MinMB > 0 {
-		minMB = c.MinMB
+	if resolved.Merge != nil && resolved.Merge.MaxMB > 0 {
+		maxMB = resolved.Merge.MaxMB
 	}
 	if c.MaxMB > 0 {
 		maxMB = c.MaxMB
 	}
 
-	minBytes := int64(minMB) * 1024 * 1024
 	maxBytes := int64(maxMB) * 1024 * 1024
 
 	imageRef := resolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
@@ -140,7 +126,7 @@ func (c *MergeCmd) runOne(cfg *Config, imageName string) error {
 		sizes[i] = size
 	}
 
-	steps := planMerge(sizes, minBytes, maxBytes)
+	steps := planMerge(sizes, maxBytes)
 
 	if c.DryRun {
 		printMergePlan(sizes, steps)
@@ -155,7 +141,7 @@ func (c *MergeCmd) runOne(cfg *Config, imageName string) error {
 		}
 	}
 	if mergeCount == 0 {
-		fmt.Fprintf(os.Stderr, "No layers to merge (%d layers, all >= %d MB)\n", len(layers), minMB)
+		fmt.Fprintf(os.Stderr, "No layers to merge (%d layers)\n", len(layers))
 		return nil
 	}
 
@@ -174,8 +160,9 @@ func (c *MergeCmd) runOne(cfg *Config, imageName string) error {
 	return nil
 }
 
-// planMerge groups consecutive small layers for merging.
-func planMerge(sizes []int64, minBytes, maxBytes int64) []MergeStep {
+// planMerge groups consecutive layers into groups up to maxBytes.
+// Groups with 2+ layers are merged; single-layer groups are kept as-is.
+func planMerge(sizes []int64, maxBytes int64) []MergeStep {
 	var steps []MergeStep
 	var group []int
 	var groupSize int64
@@ -193,18 +180,13 @@ func planMerge(sizes []int64, minBytes, maxBytes int64) []MergeStep {
 	}
 
 	for i, size := range sizes {
-		if size < minBytes {
-			if groupSize+size <= maxBytes {
-				group = append(group, i)
-				groupSize += size
-			} else {
-				flushGroup()
-				group = []int{i}
-				groupSize = size
-			}
+		if groupSize+size <= maxBytes {
+			group = append(group, i)
+			groupSize += size
 		} else {
 			flushGroup()
-			steps = append(steps, MergeStep{Keep: true, Layers: []int{i}})
+			group = []int{i}
+			groupSize = size
 		}
 	}
 	flushGroup()

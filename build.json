@@ -7,8 +7,7 @@
     "pkg": "rpm",
     "merge": {
       "auto": true,
-      "min_mb": 256,
-      "max_mb": 512
+      "max_mb": 128
     }
   },
   "images": {

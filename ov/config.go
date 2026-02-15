@@ -16,7 +16,6 @@ type Config struct {
 // MergeConfig configures post-build layer merging
 type MergeConfig struct {
 	Auto  bool `json:"auto,omitempty"`   // enable automatic merging after builds
-	MinMB int  `json:"min_mb,omitempty"` // layers smaller than this are merge candidates (default: 100)
 	MaxMB int  `json:"max_mb,omitempty"` // maximum size of a merged layer (default: 1024)
 }
 
