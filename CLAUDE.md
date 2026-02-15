@@ -8,7 +8,7 @@ Composable container images from a library of layers. Built on `docker buildx ba
 
 Two components with a clean split:
 
-**`ov` (Go CLI)** -- all computation. Parses `build.json`, scans `layers/`, resolves dependency graphs, validates, generates Containerfiles and HCL. Source: `ov/`. Registry inspection via go-containerregistry. Exception: `ov shell`/`ov start`/`ov stop` exec into `docker run`/`docker stop` as developer conveniences (not part of the build pipeline).
+**`ov` (Go CLI)** -- all computation. Parses `build.json`, scans `layers/`, resolves dependency graphs, validates, generates Containerfiles and HCL. Source: `ov/`. Registry inspection via go-containerregistry. Exception: `ov shell`/`ov start`/`ov stop`/`ov merge` exec into `docker run`/`docker stop`/`docker save`/`docker load` as developer conveniences (not part of the build pipeline).
 
 **`task` (Taskfile)** -- all execution. Thin wrappers that call `ov` for generation, `docker`/`podman` for builds. No JSON parsing, no graph logic. Source: `Taskfile.yml` + `taskfiles/{Build,Run,Setup}.yml`.
 
@@ -110,6 +110,7 @@ Every setting resolves through: **image -> defaults -> hardcoded fallback** (fir
 | `user` | `"user"` | Username for non-root operations |
 | `uid` | `1000` | User ID |
 | `gid` | `1000` | Group ID |
+| `merge` | `null` | Layer merge settings (`{"min_mb": 100, "max_mb": 1024}`). See [Layer Merging](#layer-merging). |
 
 When `base` references another image in `build.json`, the generator resolves it to the full registry/tag and creates a build dependency. The referenced image must be built first.
 
@@ -263,6 +264,8 @@ ov list layers                         # Layers from filesystem
 ov list targets                        # Bake targets from generated HCL
 ov list services                       # Layers with supervisord.conf
 ov list routes                         # Layers with route files (host + port)
+ov merge <image> [--min-mb N] [--max-mb N] [--tag TAG] [--dry-run]
+                                       # Merge small layers in a built image
 ov new layer <name>                    # Scaffold a layer directory
 ov shell <image> [-w PATH] [--tag TAG] # Bash shell in a container (mounts cwd at /workspace)
 ov start <image> [-w PATH] [--tag TAG] # Start service container with supervisord (detached)
@@ -270,11 +273,11 @@ ov stop <image>                        # Stop a running service container
 ov version                             # Print computed CalVer tag
 ```
 
-**Output conventions:** `generate`/`validate`/`new` write to stderr. `inspect`/`list`/`version` write to stdout (pipeable). `inspect --format <field>` outputs bare value for shell substitution (`tag`, `base`, `pkg`, `registry`, `platforms`, `layers`, `ports`).
+**Output conventions:** `generate`/`validate`/`new`/`merge` write to stderr. `inspect`/`list`/`version` write to stdout (pipeable). `inspect --format <field>` outputs bare value for shell substitution (`tag`, `base`, `pkg`, `registry`, `platforms`, `layers`, `ports`).
 
 **Error handling:** validation collects all errors at once. Exit codes: 0 = success, 1 = validation/user error, 2 = internal error.
 
-**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `copr.repo` requires `rpm.list`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `env` files must use `PATH+=` not `PATH=`, `ports` files must contain valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `route` files must have both `host` and `port` (valid number), images with route layers must include traefik.
+**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `copr.repo` requires `rpm.list`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `env` files must use `PATH+=` not `PATH=`, `ports` files must contain valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `route` files must have both `host` and `port` (valid number), images with route layers must include traefik, `merge.min_mb` must be > 0, `merge.max_mb` must be >= `merge.min_mb`.
 
 ---
 
@@ -294,6 +297,7 @@ project/
 |   +-- validate.go                     # All validation rules
 |   +-- version.go                      # CalVer computation
 |   +-- scaffold.go                     # `new layer` scaffolding
+|   +-- merge.go                        # `merge` command (post-build layer merging)
 |   +-- registry.go                     # Remote image inspection (go-containerregistry)
 |   +-- shell.go                        # `shell` command (execs docker run)
 |   +-- *_test.go                       # Tests for each file
@@ -303,7 +307,7 @@ project/
 +-- build.json                          # Configuration
 +-- Taskfile.yml                        # Root: includes + PATH setup
 +-- taskfiles/
-|   +-- Build.yml                       # ov, all, local, push, iso, qcow2, raw
+|   +-- Build.yml                       # ov, all, local, push, merge, iso, qcow2, raw
 |   +-- Run.yml                         # container, shell, vm
 |   +-- Setup.yml                       # builder, all
 +-- layers/<name>/                      # Layer directories (see Layer Definition)
@@ -339,6 +343,7 @@ project/
 | `task build:all` | `ov generate` -> `docker buildx bake` |
 | `task build:local -- <image>` | Build for host platform only |
 | `task build:push` | Build and push all images |
+| `task build:merge -- <image>` | Merge small layers in a built image |
 | `task run:container -- <image>` | `docker run` |
 | `task run:shell -- <image>` | Delegates to `ov shell` |
 | `task build:iso -- <image> [tag]` | Build ISO via Bootc Image Builder (bootc only) |
@@ -387,6 +392,62 @@ Direct `ov` commands (`ov list images`, `ov validate`, etc.) don't need `task`.
 - Tasks are thin wrappers. Complex logic belongs in `ov`.
 - Every public task has `desc:`. Arguments via `{{.CLI_ARGS}}`.
 - Preconditions check for required tools.
+
+---
+
+## Layer Merging
+
+Post-build optimization: `ov merge` takes an already-built image, inspects Docker layer sizes, and merges consecutive small layers into fewer larger ones. No rebuild needed.
+
+### Configuration
+
+Add `merge` to `build.json` defaults or per-image:
+
+```json
+{
+  "defaults": {
+    "merge": {
+      "min_mb": 100,
+      "max_mb": 1024
+    }
+  }
+}
+```
+
+- **`min_mb`**: Layers smaller than this (MB) are merge candidates (default: 100)
+- **`max_mb`**: Maximum size of a merged layer (MB) (default: 1024)
+
+CLI flags (`--min-mb`, `--max-mb`) override `build.json` values.
+
+### Algorithm
+
+1. Load image from Docker daemon via `docker save` -> `tarball.ImageFromPath()`
+2. Get compressed sizes via `layer.Size()`
+3. Group consecutive layers where each is < `min_mb` into groups totaling <= `max_mb`
+4. Single-layer "groups" are not merged (need 2+ consecutive candidates)
+5. For each merge group: read uncompressed tarballs, deduplicate entries by path (last writer wins), write combined tar into a single new layer
+6. Reconstruct image with `mutate.Append()`, preserving OCI history alignment (empty-layer entries for ENV/USER/EXPOSE kept in correct positions)
+7. Save via `tarball.WriteToFile()` -> `docker load`
+
+Source: `ov/merge.go`. Uses `docker save`/`docker load` via `os/exec` (same pattern as `shell.go`). No new Go dependencies -- uses `pkg/v1/tarball`, `pkg/v1/mutate`, `pkg/v1/empty` from go-containerregistry.
+
+### Usage
+
+```
+# Preview what would be merged
+ov merge fedora --dry-run
+
+# Merge with defaults (min_mb=100, max_mb=1024)
+ov merge fedora
+
+# Custom thresholds
+ov merge fedora --min-mb 50 --max-mb 512
+
+# Specific tag
+ov merge fedora --tag 2026.46.1415
+```
+
+Merge is idempotent -- running again after merging shows all layers as `[keep]`.
 
 ---
 
