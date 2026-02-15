@@ -15,6 +15,7 @@ Two components with a clean split:
 **What gets generated** (`ov generate`):
 - `.build/docker-bake.hcl` -- one explicit target per image, fully expanded (no HCL variables/matrices)
 - `.build/<image>/Containerfile` -- one per image, unconditional `RUN` steps only
+- `.build/<image>/traefik-routes.yml` -- traefik dynamic config (only for images with `route` layers)
 
 Generation is idempotent. `.build/` is disposable and gitignored.
 
@@ -43,6 +44,7 @@ A **layer** is a directory under `layers/<name>/` that installs a single concern
 | `depends` | Layer dependencies, one per line. Resolved transitively; topologically sorted. |
 | `env` | Environment variables. Merged across layers, emitted as `ENV` directives. See [ENV from Layer env Files](#env-from-layer-env-files). |
 | `ports` | Exposed ports, one per line (1-65535). Collected across layers, deduplicated, emitted as `EXPOSE` directives. |
+| `route` | Traefik reverse proxy route. Key=value: `host=<hostname>`, `port=<backend port>`. Generates dynamic traefik config. Requires traefik layer. |
 | `supervisord.conf` | Service fragment (`[program:<name>]`). Triggers supervisord assembly in images. |
 
 ### Root vs User Rule
@@ -84,8 +86,8 @@ An **image** is a named build target in `build.json`. The current configuration:
     },
     "fedora-test": {
       "base": "fedora",
-      "layers": ["testapi"],
-      "ports": ["9090:9090"]
+      "layers": ["traefik", "testapi"],
+      "ports": ["8000:8000", "8080:8080"]
     }
   }
 }
@@ -124,17 +126,19 @@ The actual order emitted by `ov/generate.go:generateContainerfile()`:
    - `pixi.toml`: `pixi install`
    - `pyproject.toml`: `pixi install --manifest-path pyproject.toml`
    - `environment.yml`: `pixi project import environment.yml && pixi install`
-5. **Supervisord config stage** -- `FROM scratch AS supervisord-conf` (only if image has service layers). Gathers header + service fragments.
-6. **`FROM ${BASE_IMAGE}`**
-7. **Bootstrap** (external base only) -- install `task`, create user/group if not exists at configured UID/GID, set `WORKDIR`. For internal base: just `USER root`.
-8. **Layer ENV** -- consolidated `ENV` directives from all layers' `env` files
-9. **EXPOSE** -- deduplicated, sorted port numbers from all layers' `ports` files
-10. **COPY pixi environments** -- `COPY --from=<layer>-pixi-build --chown=<UID>:<GID>` for each pixi layer
-11. **COPY pixi binary** -- from first pixi build stage
-12. **Per-layer steps** -- for each layer in order: rpm/deb install, root.yml, package.json, Cargo.toml, user.yml (only steps for files that exist)
-13. **Supervisord assembly** -- `cat /fragments/*.conf > /etc/supervisord.conf` (if services)
-14. **`USER <UID>`** -- final directive (uses numeric UID, not username)
-15. **`RUN bootc container lint`** -- (bootc images only)
+5. **Traefik routes stage** -- `FROM scratch AS traefik-routes` + `COPY .build/<image>/traefik-routes.yml` (only if image has layers with `route` files). Generated YAML maps hostnames to backend ports.
+6. **Supervisord config stage** -- `FROM scratch AS supervisord-conf` (only if image has service layers). Gathers header + service fragments.
+7. **`FROM ${BASE_IMAGE}`**
+8. **Bootstrap** (external base only) -- install `task`, create user/group if not exists at configured UID/GID, set `WORKDIR`. For internal base: just `USER root`.
+9. **Layer ENV** -- consolidated `ENV` directives from all layers' `env` files
+10. **EXPOSE** -- deduplicated, sorted port numbers from all layers' `ports` files
+11. **COPY pixi environments** -- `COPY --from=<layer>-pixi-build --chown=<UID>:<GID>` for each pixi layer
+12. **COPY pixi binary** -- from first pixi build stage
+13. **Per-layer steps** -- for each layer in order: rpm/deb install, root.yml, package.json, Cargo.toml, user.yml (only steps for files that exist)
+14. **Supervisord assembly** -- `cat /fragments/*.conf > /etc/supervisord.conf` (if services)
+15. **Traefik routes COPY** -- `COPY --from=traefik-routes /routes.yml /etc/traefik/dynamic/routes.yml` (if routes)
+16. **`USER <UID>`** -- final directive (uses numeric UID, not username)
+17. **`RUN bootc container lint`** -- (bootc images only)
 
 Within per-layer steps, `USER <UID>` is emitted before the first user-mode step, and `USER root` resets after the last user-mode step for the next layer.
 
@@ -258,6 +262,7 @@ ov list images                         # Images from build.json
 ov list layers                         # Layers from filesystem
 ov list targets                        # Bake targets from generated HCL
 ov list services                       # Layers with supervisord.conf
+ov list routes                         # Layers with route files (host + port)
 ov new layer <name>                    # Scaffold a layer directory
 ov shell <image> [-w PATH] [--tag TAG] # Bash shell in a container (mounts cwd at /workspace)
 ov start <image> [-w PATH] [--tag TAG] # Start service container with supervisord (detached)
@@ -269,7 +274,7 @@ ov version                             # Print computed CalVer tag
 
 **Error handling:** validation collects all errors at once. Exit codes: 0 = success, 1 = validation/user error, 2 = internal error.
 
-**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `copr.repo` requires `rpm.list`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `env` files must use `PATH+=` not `PATH=`, `ports` files must contain valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format.
+**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `copr.repo` requires `rpm.list`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `env` files must use `PATH+=` not `PATH=`, `ports` files must contain valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `route` files must have both `host` and `port` (valid number), images with route layers must include traefik.
 
 ---
 
@@ -320,7 +325,8 @@ project/
 | `nodejs` | `rpm.list`, `deb.list`, `env` | Node.js + npm. Sets `NPM_CONFIG_PREFIX`, `npm_config_cache`, PATH. |
 | `rust` | `rpm.list`, `deb.list`, `env` | Rust + Cargo via system packages. Sets PATH for `~/.cargo/bin`. |
 | `supervisord` | `depends` (python), `pixi.toml` | supervisor package via pixi. |
-| `testapi` | `depends` (supervisord), `pixi.toml`, `app.py`, `user.yml`, `supervisord.conf`, `ports` | Minimal FastAPI test service on port 9090. |
+| `traefik` | `depends` (supervisord), `root.yml`, `traefik.yml`, `supervisord.conf`, `ports` | Traefik reverse proxy. Web on :8000, dashboard on :8080. Serves routes from `route` files. |
+| `testapi` | `depends` (supervisord), `pixi.toml`, `app.py`, `user.yml`, `supervisord.conf`, `ports`, `route` | Minimal FastAPI test service on port 9090. Routed via `testapi.localhost`. |
 
 ---
 

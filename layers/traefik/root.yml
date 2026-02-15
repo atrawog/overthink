@@ -1,0 +1,15 @@
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - |
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64) ARCH=amd64;;
+          aarch64) ARCH=arm64;;
+          *) echo "Unsupported: $ARCH" >&2; exit 1;;
+        esac
+        curl -fsSL "https://github.com/traefik/traefik/releases/download/v3.4.0/traefik_v3.4.0_linux_${ARCH}.tar.gz" | tar -xzf - -C /usr/local/bin traefik
+      - mkdir -p /etc/traefik/dynamic
+      - cp /ctx/traefik.yml /etc/traefik/traefik.yml

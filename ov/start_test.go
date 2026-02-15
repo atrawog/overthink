@@ -27,8 +27,8 @@ func TestBuildStartArgsWithPorts(t *testing.T) {
 		"--name", "ov-fedora-test",
 		"-v", "/home/user/project:/workspace",
 		"-w", "/workspace",
-		"-p", "9090:9090",
-		"-p", "8080:8080",
+		"-p", "127.0.0.1:9090:9090",
+		"-p", "127.0.0.1:8080:8080",
 		"ghcr.io/atrawog/fedora-test:latest",
 		"supervisord", "-n", "-c", "/etc/supervisord.conf",
 	}

@@ -207,6 +207,77 @@ func TestLayerPortsNone(t *testing.T) {
 	}
 }
 
+func TestLayerRoute(t *testing.T) {
+	layers, err := ScanLayers("testdata")
+	if err != nil {
+		t.Fatalf("ScanLayers() error = %v", err)
+	}
+
+	ws := layers["webservice"]
+	if ws == nil {
+		t.Fatal("webservice layer not found")
+	}
+
+	if !ws.HasRoute {
+		t.Error("webservice should have route")
+	}
+
+	route, err := ws.Route()
+	if err != nil {
+		t.Fatalf("Route() error = %v", err)
+	}
+	if route.Host != "webservice.localhost" {
+		t.Errorf("Route().Host = %q, want %q", route.Host, "webservice.localhost")
+	}
+	if route.Port != "8080" {
+		t.Errorf("Route().Port = %q, want %q", route.Port, "8080")
+	}
+
+	// Test caching
+	route2, err := ws.Route()
+	if err != nil {
+		t.Fatalf("Route() second call error = %v", err)
+	}
+	if route != route2 {
+		t.Error("Route() should return cached result")
+	}
+}
+
+func TestLayerRouteNone(t *testing.T) {
+	layers, err := ScanLayers("testdata")
+	if err != nil {
+		t.Fatalf("ScanLayers() error = %v", err)
+	}
+
+	pixi := layers["pixi"]
+	if pixi.HasRoute {
+		t.Error("pixi should not have route")
+	}
+
+	route, err := pixi.Route()
+	if err != nil {
+		t.Fatalf("Route() error = %v", err)
+	}
+	if route != nil {
+		t.Errorf("Route() = %v, want nil", route)
+	}
+}
+
+func TestRouteLayers(t *testing.T) {
+	layers, err := ScanLayers("testdata")
+	if err != nil {
+		t.Fatalf("ScanLayers() error = %v", err)
+	}
+
+	routes := RouteLayers(layers)
+	if len(routes) != 1 {
+		t.Errorf("RouteLayers() returned %d layers, want 1", len(routes))
+	}
+	if len(routes) > 0 && routes[0].Name != "webservice" {
+		t.Errorf("RouteLayers()[0].Name = %q, want %q", routes[0].Name, "webservice")
+	}
+}
+
 func TestReadLineFile(t *testing.T) {
 	// Test the function with a known file
 	lines, err := readLineFile("testdata/layers/nodejs/rpm.list")

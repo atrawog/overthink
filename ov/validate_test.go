@@ -340,6 +340,126 @@ func TestValidateImagePortsBadFormat(t *testing.T) {
 	}
 }
 
+func TestValidateRouteMissingHost(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:     "svc",
+			HasRoute: true,
+			HasUserYml: true,
+			route:    &RouteConfig{Host: "", Port: "8080"},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for route missing host")
+	}
+	if !strings.Contains(err.Error(), "missing required \"host\"") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateRouteMissingPort(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:     "svc",
+			HasRoute: true,
+			HasUserYml: true,
+			route:    &RouteConfig{Host: "svc.localhost", Port: ""},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for route missing port")
+	}
+	if !strings.Contains(err.Error(), "missing required \"port\"") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateRouteInvalidPort(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:     "svc",
+			HasRoute: true,
+			HasUserYml: true,
+			route:    &RouteConfig{Host: "svc.localhost", Port: "99999"},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for route invalid port")
+	}
+	if !strings.Contains(err.Error(), "not a valid port") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateRouteWithoutTraefik(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{
+			"test": {Layers: []string{"svc"}},
+		},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:     "svc",
+			HasRoute: true,
+			HasUserYml: true,
+			route:    &RouteConfig{Host: "svc.localhost", Port: "8080"},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for route without traefik")
+	}
+	if !strings.Contains(err.Error(), "traefik layer is not reachable") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateRouteWithTraefik(t *testing.T) {
+	cfg := &Config{
+		Defaults: ImageConfig{
+			Registry:  "ghcr.io/test",
+			Pkg:       "rpm",
+			Platforms: []string{"linux/amd64"},
+		},
+		Images: map[string]ImageConfig{
+			"test": {Layers: []string{"traefik", "svc"}},
+		},
+	}
+	layers := map[string]*Layer{
+		"traefik": {
+			Name:       "traefik",
+			HasRootYml: true,
+		},
+		"svc": {
+			Name:     "svc",
+			HasRoute: true,
+			HasUserYml: true,
+			route:    &RouteConfig{Host: "svc.localhost", Port: "8080"},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err != nil {
+		t.Errorf("Validate() unexpected error: %v", err)
+	}
+}
+
 func TestIsValidPort(t *testing.T) {
 	tests := []struct {
 		input string

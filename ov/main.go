@@ -129,6 +129,7 @@ type ListCmd struct {
 	Layers   ListLayersCmd   `cmd:"" help:"Layers from filesystem"`
 	Targets  ListTargetsCmd  `cmd:"" help:"Bake targets from generated HCL"`
 	Services ListServicesCmd `cmd:"" help:"Layers with supervisord.conf"`
+	Routes   ListRoutesCmd   `cmd:"" help:"Layers with route files"`
 }
 
 // ListImagesCmd lists images from build.json
@@ -219,6 +220,39 @@ func (c *ListServicesCmd) Run() error {
 	services := ServiceLayers(layers)
 	for _, layer := range services {
 		fmt.Println(layer.Name)
+	}
+	return nil
+}
+
+// ListRoutesCmd lists layers with route files
+type ListRoutesCmd struct{}
+
+func (c *ListRoutesCmd) Run() error {
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	layers, err := ScanLayers(dir)
+	if err != nil {
+		return err
+	}
+
+	routes := RouteLayers(layers)
+	// Sort by name for deterministic output
+	names := make([]string, 0, len(routes))
+	for _, layer := range routes {
+		names = append(names, layer.Name)
+	}
+	sortStrings(names)
+
+	for _, name := range names {
+		layer := layers[name]
+		route, err := layer.Route()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%s\thost=%s\tport=%s\n", name, route.Host, route.Port)
 	}
 	return nil
 }

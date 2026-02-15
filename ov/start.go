@@ -90,7 +90,7 @@ func buildStartArgs(imageRef, workspace string, ports []string, name string) []s
 		"-w", "/workspace",
 	}
 	for _, port := range ports {
-		args = append(args, "-p", port)
+		args = append(args, "-p", localizePort(port))
 	}
 	args = append(args, imageRef, "supervisord", "-n", "-c", "/etc/supervisord.conf")
 	return args

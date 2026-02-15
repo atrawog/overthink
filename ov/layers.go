@@ -26,6 +26,7 @@ type Layer struct {
 	HasSupervisord    bool
 	HasEnv            bool
 	HasPorts          bool
+	HasRoute          bool
 	Depends           []string
 
 	// Cached file contents (loaded on demand)
@@ -34,6 +35,7 @@ type Layer struct {
 	coprRepos   []string
 	ports       []string
 	envConfig   *EnvConfig
+	route       *RouteConfig
 }
 
 // ScanLayers scans the layers/ directory and returns all layers
@@ -86,6 +88,7 @@ func scanLayer(path string, name string) (*Layer, error) {
 	layer.HasSupervisord = fileExists(filepath.Join(path, "supervisord.conf"))
 	layer.HasEnv = fileExists(filepath.Join(path, "env"))
 	layer.HasPorts = fileExists(filepath.Join(path, "ports"))
+	layer.HasRoute = fileExists(filepath.Join(path, "route"))
 
 	// Read depends file if present
 	dependsPath := filepath.Join(path, "depends")
@@ -204,6 +207,57 @@ func (l *Layer) Ports() ([]string, error) {
 	}
 	l.ports = ports
 	return l.ports, nil
+}
+
+// RouteConfig represents a route file declaration
+type RouteConfig struct {
+	Host string
+	Port string
+}
+
+// Route returns the route config from the route file (cached)
+func (l *Layer) Route() (*RouteConfig, error) {
+	if l.route != nil {
+		return l.route, nil
+	}
+	if !l.HasRoute {
+		return nil, nil
+	}
+
+	lines, err := readLineFile(filepath.Join(l.Path, "route"))
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &RouteConfig{}
+	for _, line := range lines {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		switch key {
+		case "host":
+			cfg.Host = value
+		case "port":
+			cfg.Port = value
+		}
+	}
+
+	l.route = cfg
+	return l.route, nil
+}
+
+// RouteLayers returns layers that have a route file
+func RouteLayers(layers map[string]*Layer) []*Layer {
+	var routes []*Layer
+	for _, layer := range layers {
+		if layer.HasRoute {
+			routes = append(routes, layer)
+		}
+	}
+	return routes
 }
 
 // LayerNames returns a sorted list of layer names

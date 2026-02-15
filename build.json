@@ -22,8 +22,8 @@
     },
     "fedora-test": {
       "base": "fedora",
-      "layers": ["testapi"],
-      "ports": ["9090:9090"]
+      "layers": ["traefik", "testapi"],
+      "ports": ["8000:8000", "8080:8080"]
     }
   }
 }

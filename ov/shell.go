@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -75,10 +76,19 @@ func buildShellArgs(imageRef, workspace string, uid, gid int, ports []string) []
 		"--user", fmt.Sprintf("%d:%d", uid, gid),
 	}
 	for _, port := range ports {
-		args = append(args, "-p", port)
+		args = append(args, "-p", localizePort(port))
 	}
 	args = append(args, "--entrypoint", "bash", imageRef)
 	return args
+}
+
+// localizePort prefixes a port mapping with 127.0.0.1 to bind only to localhost.
+// "80:8000" -> "127.0.0.1:80:8000", "8080" -> "127.0.0.1:8080:8080"
+func localizePort(mapping string) string {
+	if strings.Contains(mapping, ":") {
+		return "127.0.0.1:" + mapping
+	}
+	return fmt.Sprintf("127.0.0.1:%s:%s", mapping, mapping)
 }
 
 // findExecutable locates an executable in PATH.

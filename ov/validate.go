@@ -56,6 +56,9 @@ func Validate(cfg *Config, layers map[string]*Layer) error {
 	// Validate ports
 	validatePorts(cfg, layers, errs)
 
+	// Validate routes
+	validateRoutes(cfg, layers, errs)
+
 	// Validate no circular dependencies in layers
 	validateLayerDAG(cfg, layers, errs)
 
@@ -244,6 +247,56 @@ func validatePorts(cfg *Config, layers map[string]*Layer, errs *ValidationError)
 	for name, img := range cfg.Images {
 		if len(img.Ports) > 0 {
 			validatePortMappings(name, img.Ports)
+		}
+	}
+}
+
+// validateRoutes validates route file declarations in layers
+func validateRoutes(cfg *Config, layers map[string]*Layer, errs *ValidationError) {
+	// Validate route file contents
+	for name, layer := range layers {
+		if !layer.HasRoute {
+			continue
+		}
+		route, err := layer.Route()
+		if err != nil {
+			errs.Add("layer %q: error reading route file: %v", name, err)
+			continue
+		}
+		if route.Host == "" {
+			errs.Add("layer %q route: missing required \"host\" field", name)
+		}
+		if route.Port == "" {
+			errs.Add("layer %q route: missing required \"port\" field", name)
+		} else if !isValidPort(route.Port) {
+			errs.Add("layer %q route: %q is not a valid port number (1-65535)", name, route.Port)
+		}
+	}
+
+	// For each image with route layers, traefik must be reachable
+	for imageName, img := range cfg.Images {
+		hasRoute := false
+		hasTraefik := false
+
+		// Resolve full layer order for this image (includes transitive deps)
+		resolved, err := ResolveLayerOrder(img.Layers, layers, nil)
+		if err != nil {
+			continue // layer DAG validation will catch this
+		}
+
+		for _, layerName := range resolved {
+			if layer, ok := layers[layerName]; ok {
+				if layer.HasRoute {
+					hasRoute = true
+				}
+				if layerName == "traefik" {
+					hasTraefik = true
+				}
+			}
+		}
+
+		if hasRoute && !hasTraefik {
+			errs.Add("image %q: has layers with route files but traefik layer is not reachable", imageName)
 		}
 	}
 }

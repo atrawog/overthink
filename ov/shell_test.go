@@ -42,13 +42,49 @@ func TestBuildShellArgsWithPorts(t *testing.T) {
 		"-v", "/home/user/project:/workspace",
 		"-w", "/workspace",
 		"--user", "1000:1000",
-		"-p", "9090:9090",
-		"-p", "8080:8080",
+		"-p", "127.0.0.1:9090:9090",
+		"-p", "127.0.0.1:8080:8080",
 		"--entrypoint", "bash",
 		"ghcr.io/atrawog/fedora:latest",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildShellArgs() =\n  %v\nwant\n  %v", args, want)
+	}
+}
+
+func TestBuildShellArgsWithSinglePort(t *testing.T) {
+	args := buildShellArgs("ghcr.io/atrawog/fedora:latest", "/home/user/project", 1000, 1000, []string{"8080"})
+	want := []string{
+		"docker", "run", "--rm", "-it",
+		"-v", "/home/user/project:/workspace",
+		"-w", "/workspace",
+		"--user", "1000:1000",
+		"-p", "127.0.0.1:8080:8080",
+		"--entrypoint", "bash",
+		"ghcr.io/atrawog/fedora:latest",
+	}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("buildShellArgs() =\n  %v\nwant\n  %v", args, want)
+	}
+}
+
+func TestLocalizePort(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"80:8000", "127.0.0.1:80:8000"},
+		{"8080:8080", "127.0.0.1:8080:8080"},
+		{"8080", "127.0.0.1:8080:8080"},
+		{"9090", "127.0.0.1:9090:9090"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := localizePort(tt.input)
+			if got != tt.want {
+				t.Errorf("localizePort(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 

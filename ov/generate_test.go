@@ -73,3 +73,59 @@ func TestGenerateBakeHCL_InternalBaseContexts(t *testing.T) {
 		t.Error("fedora target should not have contexts")
 	}
 }
+
+func TestGenerateTraefikRoutes(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	g := &Generator{
+		BuildDir: tmpDir,
+		Layers: map[string]*Layer{
+			"traefik": {
+				Name:       "traefik",
+				HasRootYml: true,
+			},
+			"svc": {
+				Name:     "svc",
+				HasRoute: true,
+				HasUserYml: true,
+				route:    &RouteConfig{Host: "svc.localhost", Port: "9090"},
+			},
+		},
+	}
+
+	err := g.generateTraefikRoutes("test-image", []string{"traefik", "svc"})
+	if err != nil {
+		t.Fatalf("generateTraefikRoutes() error = %v", err)
+	}
+
+	data, err := os.ReadFile(tmpDir + "/test-image/traefik-routes.yml")
+	if err != nil {
+		t.Fatalf("reading generated routes YAML: %v", err)
+	}
+	yaml := string(data)
+
+	// Check structure
+	if !strings.Contains(yaml, "http:") {
+		t.Error("missing http: key")
+	}
+	if !strings.Contains(yaml, "routers:") {
+		t.Error("missing routers: key")
+	}
+	if !strings.Contains(yaml, "services:") {
+		t.Error("missing services: key")
+	}
+
+	// Check route entry
+	if !strings.Contains(yaml, "svc:") {
+		t.Error("missing svc router/service entry")
+	}
+	if !strings.Contains(yaml, `Host(`+"`"+`svc.localhost`+"`"+`)`) {
+		t.Error("missing Host rule")
+	}
+	if !strings.Contains(yaml, "http://127.0.0.1:9090") {
+		t.Error("missing backend URL")
+	}
+	if !strings.Contains(yaml, "- web") {
+		t.Error("missing entryPoints web")
+	}
+}

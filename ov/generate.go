@@ -180,6 +180,25 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		}
 	}
 
+	// Check if this image has route layers
+	hasRoutes := false
+	for _, layerName := range layerOrder {
+		layer := g.Layers[layerName]
+		if layer.HasRoute {
+			hasRoutes = true
+			break
+		}
+	}
+
+	// Generate traefik routes file and scratch stage if needed
+	if hasRoutes {
+		if err := g.generateTraefikRoutes(imageName, layerOrder); err != nil {
+			return err
+		}
+		b.WriteString("FROM scratch AS traefik-routes\n")
+		b.WriteString(fmt.Sprintf("COPY .build/%s/traefik-routes.yml /routes.yml\n\n", imageName))
+	}
+
 	// Emit supervisord config stage if needed
 	if hasServices {
 		b.WriteString("FROM scratch AS supervisord-conf\n")
@@ -256,6 +275,12 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		b.WriteString("# Assemble supervisord.conf\n")
 		b.WriteString("RUN --mount=type=bind,from=supervisord-conf,source=/fragments,target=/fragments \\\n")
 		b.WriteString("    cat /fragments/*.conf > /etc/supervisord.conf\n\n")
+	}
+
+	// Copy traefik dynamic routes if needed
+	if hasRoutes {
+		b.WriteString("# Traefik dynamic routes\n")
+		b.WriteString("COPY --from=traefik-routes /routes.yml /etc/traefik/dynamic/routes.yml\n\n")
 	}
 
 	// Final USER directive (use UID for robustness)
@@ -394,6 +419,56 @@ func (g *Generator) writeExpose(b *strings.Builder, layerOrder []string) {
 		b.WriteString(fmt.Sprintf("EXPOSE %s\n", port))
 	}
 	b.WriteString("\n")
+}
+
+// generateTraefikRoutes generates a traefik dynamic config YAML for route layers
+func (g *Generator) generateTraefikRoutes(imageName string, layerOrder []string) error {
+	var b strings.Builder
+
+	b.WriteString("# .build/" + imageName + "/traefik-routes.yml (generated -- do not edit)\n")
+	b.WriteString("http:\n")
+	b.WriteString("  routers:\n")
+
+	// Collect routes in layer order (deterministic)
+	type routeEntry struct {
+		name string
+		cfg  *RouteConfig
+	}
+	var routes []routeEntry
+	for _, layerName := range layerOrder {
+		layer := g.Layers[layerName]
+		if !layer.HasRoute {
+			continue
+		}
+		route, err := layer.Route()
+		if err != nil || route == nil {
+			continue
+		}
+		routes = append(routes, routeEntry{name: layerName, cfg: route})
+	}
+
+	for _, r := range routes {
+		b.WriteString(fmt.Sprintf("    %s:\n", r.name))
+		b.WriteString(fmt.Sprintf("      rule: \"Host(`%s`)\"\n", r.cfg.Host))
+		b.WriteString(fmt.Sprintf("      service: %s\n", r.name))
+		b.WriteString("      entryPoints:\n")
+		b.WriteString("        - web\n")
+	}
+
+	b.WriteString("  services:\n")
+	for _, r := range routes {
+		b.WriteString(fmt.Sprintf("    %s:\n", r.name))
+		b.WriteString("      loadBalancer:\n")
+		b.WriteString("        servers:\n")
+		b.WriteString(fmt.Sprintf("          - url: \"http://127.0.0.1:%s\"\n", r.cfg.Port))
+	}
+
+	imageDir := filepath.Join(g.BuildDir, imageName)
+	if err := os.MkdirAll(imageDir, 0755); err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(imageDir, "traefik-routes.yml"), []byte(b.String()), 0644)
 }
 
 // writeLayerSteps writes the RUN steps for a single layer
