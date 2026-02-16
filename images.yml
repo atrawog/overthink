@@ -106,6 +106,17 @@ images:
     platforms:
       - linux/amd64
 
+  openclaw-ollama:
+    base: nvidia
+    layers:
+      - openclaw
+      - ollama
+    ports:
+      - "18789:18789"
+      - "11434:11434"
+    platforms:
+      - linux/amd64
+
   comfyui:
     base: nvidia-python
     layers:

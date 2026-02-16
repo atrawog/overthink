@@ -250,6 +250,18 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		}
 	}
 
+	// Emit per-layer npm build stages
+	for _, layerName := range layerOrder {
+		if g.Layers[layerName].HasPackageJson {
+			b.WriteString(fmt.Sprintf("FROM node:lts-slim AS %s-npm-build\n", layerName))
+			b.WriteString("RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*\n")
+			b.WriteString(fmt.Sprintf("COPY layers/%s/package.json /tmp/package.json\n", layerName))
+			b.WriteString("WORKDIR /tmp\n")
+			b.WriteString("ENV NPM_CONFIG_PREFIX=/npm-global\n")
+			b.WriteString("RUN node -e 'var d=require(\"./package.json\").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v===\"*\"?n:n+\"@\"+v)' | xargs npm install -g\n\n")
+		}
+	}
+
 	// Check if this is a service image (has supervisord layers)
 	hasServices := false
 	for _, layerName := range layerOrder {
@@ -348,16 +360,19 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		}
 	}
 
-	// Pre-create npm-global directory if any layer needs it (avoids duplicate mkdir per layer)
+	// Copy npm environments from build stages
 	hasNpm := false
 	for _, layerName := range layerOrder {
 		if g.Layers[layerName].HasPackageJson {
-			hasNpm = true
-			break
+			if !hasNpm {
+				b.WriteString("# Copy npm packages\n")
+				hasNpm = true
+			}
+			b.WriteString(fmt.Sprintf("COPY --from=%s-npm-build --chown=%d:%d /npm-global %s/.npm-global\n", layerName, img.UID, img.GID, img.Home))
 		}
 	}
 	if hasNpm {
-		b.WriteString(fmt.Sprintf("RUN mkdir -p %s/.npm-global && chown -R %d:%d %s/.npm-global\n\n", img.Home, img.UID, img.GID, img.Home))
+		b.WriteString("\n")
 	}
 
 	// Process each layer
@@ -629,16 +644,7 @@ func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *R
 		g.writeRootYml(b, layerName, img.Pkg)
 	}
 
-	// 4. package.json (user)
-	if layer.HasPackageJson {
-		if !asUser {
-			b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
-			asUser = true
-		}
-		g.writePackageJson(b, layerName, img)
-	}
-
-	// 5. Cargo.toml (user)
+	// 4. Cargo.toml (user)
 	if layer.HasCargoToml {
 		if !asUser {
 			b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
@@ -647,7 +653,7 @@ func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *R
 		g.writeCargoToml(b, layerName, img)
 	}
 
-	// 6. user.yml (user)
+	// 5. user.yml (user)
 	if layer.HasUserYml {
 		if !asUser {
 			b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
@@ -730,12 +736,6 @@ func (g *Generator) writeRootYml(b *strings.Builder, layerName string, pkg strin
 		b.WriteString("    --mount=type=cache,dst=/var/cache/libdnf5,sharing=locked \\\n")
 	}
 	b.WriteString("    cd /ctx && task -t root.yml install\n")
-}
-
-func (g *Generator) writePackageJson(b *strings.Builder, layerName string, img *ResolvedImage) {
-	b.WriteString(fmt.Sprintf("RUN --mount=type=bind,from=%s,source=/,target=/ctx \\\n", layerName))
-	b.WriteString(fmt.Sprintf("    --mount=type=cache,dst=%s/.cache/npm,uid=%d,gid=%d \\\n", img.Home, img.UID, img.GID))
-	b.WriteString("    npm install -g /ctx\n")
 }
 
 func (g *Generator) writeCargoToml(b *strings.Builder, layerName string, img *ResolvedImage) {
