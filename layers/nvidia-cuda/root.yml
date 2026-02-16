@@ -4,6 +4,12 @@ version: '3'
 tasks:
   install:
     cmds:
+      # Add negativo17 multimedia repo (disabled by default, enabled per-install)
+      - |
+        dnf5 config-manager addrepo \
+          --from-repofile="https://negativo17.org/repos/fedora-multimedia.repo"
+        dnf5 config-manager setopt "fedora-multimedia.enabled=0"
+        rpm --import https://negativo17.org/repos/RPM-GPG-KEY-slaanesh || true
       # Base NVIDIA packages
       - dnf5 install -y libva-nvidia-driver onnxruntime libaio-devel cpio
       # CUDA toolkit + cuDNN (excluding driver libs for CDI compatibility)

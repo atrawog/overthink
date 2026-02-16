@@ -1,8 +1,23 @@
-# ComfyUI installation
+# ComfyUI + ComfyUI-Manager installation
 version: '3'
 
 tasks:
   install:
     cmds:
-      - git clone https://github.com/comfyanonymous/ComfyUI.git ~/ComfyUI || true
-      - git clone https://github.com/ltdrdata/ComfyUI-Manager.git ~/ComfyUI/custom_nodes/ComfyUI-Manager || true
+      - git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git ~/ComfyUI || true
+      # Create standard model directory structure
+      - |
+        cd ~/ComfyUI
+        mkdir -p models/{checkpoints,clip,clip_vision,configs,controlnet}
+        mkdir -p models/{diffusers,diffusion_models,embeddings,gligen,hypernetworks,loras}
+        mkdir -p models/{photomaker,style_models,text_encoders,unet,upscale_models,vae,vae_approx}
+        mkdir -p custom_nodes output input user
+      # Install ComfyUI requirements into pixi environment
+      - ~/.pixi/envs/default/bin/python -m pip install -r ~/ComfyUI/requirements.txt
+      - git clone --depth 1 https://github.com/ltdrdata/ComfyUI-Manager.git ~/ComfyUI/custom_nodes/ComfyUI-Manager || true
+      # Install ComfyUI-Manager dependencies
+      - |
+        if [ -f ~/ComfyUI/custom_nodes/ComfyUI-Manager/requirements.txt ]; then
+          ~/.pixi/envs/default/bin/python -m pip install --no-cache-dir \
+            -r ~/ComfyUI/custom_nodes/ComfyUI-Manager/requirements.txt || true
+        fi

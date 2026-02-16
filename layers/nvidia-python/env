@@ -1,0 +1,5 @@
+NVIDIA_PYTHON_PROJECT=~/.pixi
+LLAMA_CPP_PATH=~/llama.cpp
+UNSLOTH_SKIP_LLAMA_CPP_INSTALL=1
+PATH+=:~/llama.cpp
+LD_LIBRARY_PATH=/usr/lib64:$HOME/llama.cpp

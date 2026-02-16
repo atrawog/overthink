@@ -1,7 +1,9 @@
-# Ollama LLM inference server
+# Ollama LLM inference server (manual tarball, no systemd)
 version: '3'
 
 tasks:
   install:
     cmds:
-      - curl -fsSL https://ollama.com/install.sh | sh
+      - |
+        curl -fsSL https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst \
+          | tar --zstd -xC /usr

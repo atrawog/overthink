@@ -1,0 +1,71 @@
+# Unsloth + transformers upgrade + MCP server + vLLM patch
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      # Install unsloth-zoo + unsloth (--no-deps to bypass conservative constraints)
+      - |
+        ~/.pixi/envs/default/bin/python -m pip install --no-deps \
+          "unsloth-zoo==2025.12.8" \
+          "unsloth==2025.12.10"
+      # Upgrade transformers to 5.0.0rc1 (pixi installs 4.57.3 for langchain compat)
+      - |
+        ~/.pixi/envs/default/bin/python -m pip uninstall -y transformers huggingface-hub || true
+        ~/.pixi/envs/default/bin/python -m pip install --no-cache-dir \
+          "transformers==5.0.0rc1"
+      # Enable jupyter-mcp-server extension
+      - |
+        JUPYTER_CONFIG_DIR=~/.pixi/envs/default/etc/jupyter/jupyter_server_config.d
+        mkdir -p "$JUPYTER_CONFIG_DIR"
+        echo '{"ServerApp": {"jpserver_extensions": {"jupyter_mcp_server": true}}}' > \
+          "$JUPYTER_CONFIG_DIR/jupyter_mcp_server.json"
+      # Patch unsloth_zoo for vLLM 0.14 compatibility (create_lora_manager signature)
+      - |
+        SITE_PACKAGES=~/.pixi/envs/default/lib/python3.13/site-packages
+        VLLM_LORA_FILE="${SITE_PACKAGES}/unsloth_zoo/vllm_lora_worker_manager.py"
+        if [ ! -f "$VLLM_LORA_FILE" ]; then
+          echo "unsloth_zoo vllm_lora_worker_manager.py not found, skipping patch"
+          exit 0
+        fi
+        if grep -q 'vllm_config: Any = None' "$VLLM_LORA_FILE"; then
+          echo "Already patched"
+          exit 0
+        fi
+        ~/.pixi/envs/default/bin/python << 'PYTHON_PATCH'
+        import re, sys
+        file_path = sys.argv[0] if len(sys.argv) > 1 else None
+        import os
+        home = os.path.expanduser("~")
+        file_path = f"{home}/.pixi/envs/default/lib/python3.13/site-packages/unsloth_zoo/vllm_lora_worker_manager.py"
+        with open(file_path, "r") as f:
+            lines = f.readlines()
+        patched_sig = 0
+        i = 0
+        new_lines = []
+        while i < len(lines):
+            if "def create_lora_manager(" in lines[i] and "vllm_config: Any = None" not in lines[i]:
+                if i + 3 < len(lines):
+                    combined = lines[i] + lines[i+1] + lines[i+2] + lines[i+3]
+                    if ("self," in combined and
+                        "model: torch.nn.Module" in combined and
+                        ") -> Any:" in combined):
+                        indent = len(lines[i]) - len(lines[i].lstrip())
+                        indent_str = " " * indent
+                        new_lines.append(f"{indent_str}def create_lora_manager(self, model: torch.nn.Module, vllm_config: Any = None) -> Any:\n")
+                        i += 4
+                        patched_sig += 1
+                        continue
+            new_lines.append(lines[i])
+            i += 1
+        content = "".join(new_lines)
+        old_pattern1 = r"(lora_manager = create_lora_manager\(\s*model,\s*max_num_seqs=self\.max_num_seqs,\s*max_num_batched_tokens=self\.max_num_batched_tokens,\s*vocab_size=self\.vocab_size,\s*lora_config=self\.lora_config,\s*device=self\.device,\s*lora_manager_cls=self\._manager_cls,)(\s*\))"
+        new_pattern1 = r"\1\n            vllm_config=vllm_config,\2"
+        old_pattern2 = r"(lora_manager = create_lora_manager\(\s*model,\s*lora_manager_cls=self\._manager_cls,\s*max_num_seqs=self\.max_num_seqs,\s*vocab_size=self\.vocab_size,\s*lora_config=self\.lora_config,\s*device=self\.device,\s*max_num_batched_tokens=self\.max_num_batched_tokens,)(\s*\))"
+        new_pattern2 = r"\1\n            vllm_config=vllm_config,\2"
+        if "vllm_config=vllm_config," not in content:
+            content, n1 = re.subn(old_pattern1, new_pattern1, content, flags=re.MULTILINE)
+            content, n2 = re.subn(old_pattern2, new_pattern2, content, flags=re.MULTILINE)
+        with open(file_path, "w") as f:
+            f.write(content)
+        PYTHON_PATCH

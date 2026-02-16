@@ -1,1 +1,2 @@
 RUNNER_WORK_DIR=/opt/actions-runner/_work
+RUNNER_GROUP=Default
