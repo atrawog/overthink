@@ -54,7 +54,7 @@ func TestGenerateBakeHCL_InternalBaseContexts(t *testing.T) {
 	if !strings.Contains(hcl, `depends_on = ["fedora"]`) {
 		t.Error("missing depends_on for fedora-test")
 	}
-	if !strings.Contains(hcl, `"ghcr.io/atrawog/fedora:2026.46.1415" = "target:fedora"`) {
+	if !strings.Contains(hcl, `"ghcr.io/atrawog/fedora:latest" = "target:fedora"`) {
 		t.Error("missing contexts block for fedora-test")
 	}
 

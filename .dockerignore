@@ -1,0 +1,13 @@
+# Prevent non-essential files from busting Docker layer caches
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.egg-info
+**/node_modules
+**/.git
+**/.DS_Store
+**/*~
+**/*.swp
+**/*.swo
+**/.pytest_cache
+**/.mypy_cache

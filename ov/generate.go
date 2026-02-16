@@ -99,8 +99,39 @@ func NewGenerator(dir string, tag string) (*Generator, error) {
 	}, nil
 }
 
+// cleanStaleBuildDirs removes image directories in .build/ that don't correspond
+// to any enabled image. This prevents leftovers from renamed/removed images.
+func (g *Generator) cleanStaleBuildDirs() error {
+	entries, err := os.ReadDir(g.BuildDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if _, exists := g.Images[name]; !exists {
+			path := filepath.Join(g.BuildDir, name)
+			if err := os.RemoveAll(path); err != nil {
+				return fmt.Errorf("removing stale dir %s: %w", path, err)
+			}
+			fmt.Fprintf(os.Stderr, "Removed stale build dir: .build/%s\n", name)
+		}
+	}
+	return nil
+}
+
 // Generate generates all build artifacts
 func (g *Generator) Generate() error {
+	// Clean stale image directories from .build/ (leftovers from removed/renamed images)
+	if err := g.cleanStaleBuildDirs(); err != nil {
+		return fmt.Errorf("cleaning stale build dirs: %w", err)
+	}
+
 	// Create .build directory
 	if err := os.MkdirAll(g.BuildDir, 0755); err != nil {
 		return fmt.Errorf("creating .build directory: %w", err)
@@ -311,6 +342,18 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		}
 	}
 
+	// Pre-create npm-global directory if any layer needs it (avoids duplicate mkdir per layer)
+	hasNpm := false
+	for _, layerName := range layerOrder {
+		if g.Layers[layerName].HasPackageJson {
+			hasNpm = true
+			break
+		}
+	}
+	if hasNpm {
+		b.WriteString(fmt.Sprintf("RUN mkdir -p %s/.npm-global && chown -R %d:%d %s/.npm-global\n\n", img.Home, img.UID, img.GID, img.Home))
+	}
+
 	// Process each layer
 	for _, layerName := range layerOrder {
 		g.writeLayerSteps(&b, layerName, img)
@@ -352,9 +395,20 @@ func (g *Generator) resolveBaseImage(img *ResolvedImage) string {
 	if img.IsExternalBase {
 		return img.Base
 	}
-	// Internal base - resolve to full tag
-	baseImg := g.Images[img.Base]
-	return baseImg.FullTag
+	// Internal base - use stable :latest reference so Containerfile content
+	// doesn't change on every generate (CalVer tag changes each minute).
+	// The HCL contexts mapping redirects this to the actual target output.
+	return g.stableBaseRef(img.Base)
+}
+
+// stableBaseRef returns a stable image reference for an internal base image.
+// Uses :latest tag instead of CalVer to prevent unnecessary cache invalidation.
+func (g *Generator) stableBaseRef(parentName string) string {
+	parentImg := g.Images[parentName]
+	if parentImg.Registry != "" {
+		return fmt.Sprintf("%s/%s:latest", parentImg.Registry, parentName)
+	}
+	return fmt.Sprintf("%s:latest", parentName)
 }
 
 // writeBootstrap writes the bootstrap preamble for external base images
@@ -573,8 +627,6 @@ func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *R
 	// 4. package.json (user)
 	if layer.HasPackageJson {
 		if !asUser {
-			// Ensure npm prefix directory is writable by the user (may be root-owned from parent image)
-			b.WriteString(fmt.Sprintf("RUN mkdir -p %s/.npm-global && chown -R %d:%d %s/.npm-global\n", img.Home, img.UID, img.GID, img.Home))
 			b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
 			asUser = true
 		}
@@ -744,8 +796,8 @@ func (g *Generator) generateBakeHCL(order []string) error {
 		// Dependencies
 		if !img.IsExternalBase {
 			b.WriteString(fmt.Sprintf("  depends_on = [%q]\n", img.Base))
-			baseImg := g.Images[img.Base]
-			b.WriteString(fmt.Sprintf("  contexts = {\n    %q = \"target:%s\"\n  }\n", baseImg.FullTag, img.Base))
+			stableRef := g.stableBaseRef(img.Base)
+			b.WriteString(fmt.Sprintf("  contexts = {\n    %q = \"target:%s\"\n  }\n", stableRef, img.Base))
 		}
 
 		b.WriteString("}\n\n")
