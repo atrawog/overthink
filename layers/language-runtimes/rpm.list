@@ -1,0 +1,9 @@
+# Additional language runtimes beyond nodejs/rust/python
+dotnet-sdk-9.0
+golang-bin
+golang-bazil-fuse-devel
+libicu
+php
+python3-devel
+python3-ramalama
+nodejs-devel

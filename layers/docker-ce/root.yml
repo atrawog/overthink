@@ -1,0 +1,10 @@
+# Docker CE from external repo
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - dnf5 config-manager addrepo --from-repofile="https://download.docker.com/linux/fedora/docker-ce.repo"
+      - dnf5 config-manager setopt docker-ce-stable.enabled=0
+      - dnf5 install -y --enable-repo="docker-ce-stable" containerd.io docker-buildx-plugin docker-ce docker-ce-cli docker-compose-plugin
+      - mkdir -p /etc/modules-load.d && echo "iptable_nat" >> /etc/modules-load.d/ip_tables.conf

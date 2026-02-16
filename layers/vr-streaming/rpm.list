@@ -1,0 +1,19 @@
+# VR/AR/XR + video processing libraries
+avahi-devel
+avahi-glib-devel
+eigen3-devel
+glslang-devel
+gstreamer1-devel
+json-devel
+libnotify-devel
+librealsense
+libuvc
+libXrandr-devel
+opencv
+opencv-video
+openhmd
+openvr-api
+openxr-devel
+systemd-devel
+vulkan-devel
+vulkan-loader-devel

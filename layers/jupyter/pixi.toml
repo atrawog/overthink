@@ -1,0 +1,200 @@
+[workspace]
+name = "nvidia-jupyter-environment"
+version = "0.1.0"
+description = "Full LLM Stack: NVIDIA ML/AI + JupyterLab for bazzite-ai-pod-jupyter"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+
+# JupyterLab core
+jupyterlab = ">=4.0"
+ipywidgets = ">=8.0"
+jupyterlab-git = "*"
+jupyterlab-lsp = "*"
+python-lsp-server = "*"
+jupyterlab-spellchecker = "*"
+jupyter-resource-usage = "*"
+
+# ML/AI extensions
+tensorboard = "*"
+wandb = "*"
+
+# Data science stack
+matplotlib = "*"
+seaborn = "*"
+pandas = "*"
+numpy = "<2.3"     # Constrained for numba 0.61.2 (vLLM dependency)
+scikit-learn = "*"
+tqdm = "*"
+scipy = "*"
+
+# Data processing
+polars = "*"
+pyarrow = "*"
+dask = "*"
+fsspec = "<=2025.9.0"
+
+# Additional tools
+ipykernel = "*"
+nbconvert = "*"
+nbformat = "*"
+graphviz = "*"
+papermill = "*"
+marimo = "*"
+duckdb = "*"
+sqlglot = "*"
+altair = "*"
+vegafusion = "*"
+vl-convert-python = "*"
+black = "*"
+pytest = "*"
+mkdocs = "*"
+
+[pypi-dependencies]
+# ============================================================
+# CRITICAL: These MUST match nvidia-python EXACTLY
+# Same version specs ensure pixi recognizes them as installed
+# ============================================================
+
+# === PyTorch with CUDA 13.0 (MUST MATCH nvidia-python) ===
+torch = { version = ">=2.9.1", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === Memory Optimization (MUST MATCH nvidia-python) ===
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === vLLM (installed via pip in nvidia-python build script) ===
+# vLLM 0.14.0 cu130 is installed from nightly wheels in nvidia-python layer
+# This stacks correctly - no pypi spec needed here
+
+# === HuggingFace Core (MUST MATCH nvidia-python) ===
+transformers = ">=4.57.3" # Base version; 5.0.0rc1 installed via pip in build script
+accelerate = "*"
+safetensors = ">=0.4.2"
+
+# === Core Numerical (MUST MATCH nvidia-python) ===
+einops = ">=0.7.0"
+
+# === Image Processing (MUST MATCH nvidia-python) ===
+pillow = ">=10.0.0"
+
+# === Video Processing (MUST MATCH nvidia-python) ===
+av = "*"
+
+# === Async & Networking (MUST MATCH nvidia-python) ===
+aiohttp = ">=3.9.0"
+
+# === Computer Vision (MUST MATCH nvidia-python) ===
+kornia = ">=0.7.1"
+spandrel = ">=0.3.4"
+
+# === Diffusion/SDE (MUST MATCH nvidia-python) ===
+torchsde = "*"
+
+# === Utilities (MUST MATCH nvidia-python) ===
+psutil = "*"
+pyyaml = "*"
+
+# === Configuration (MUST MATCH nvidia-python) ===
+pydantic = ">=2.0"
+pydantic-settings = ">=2.0"
+python-dotenv = "*"
+
+# ============================================================
+# JUPYTER-SPECIFIC PACKAGES (not in nvidia-python)
+# ============================================================
+
+# Jupyter MCP Server
+jupyter-mcp-server = { git = "https://github.com/atrawog/jupyter-mcp-server.git" }
+jupyter-collaboration = ">=4.0.2"
+
+# HuggingFace ecosystem
+datasets = "==4.3.0"
+huggingface_hub = "*"
+tokenizers = "*"
+sentencepiece = "*"
+tiktoken = "*"
+
+# Fine-tuning libraries
+peft = "*"
+trl = "*"
+bitsandbytes = "*"
+deepspeed = "*"
+boto3 = "*"
+botocore = "*"
+liger-kernel = "*"
+
+# LangChain & RAG
+langchain = "*"
+langchain-core = "*"
+langchain-openai = "*"
+langchain-community = "*"
+langchain-huggingface = "*"
+langchain-classic = "*"
+langchain-anthropic = "*"
+chromadb = "*"
+faiss-cpu = "*"
+
+# Evaluation
+evidently = { version = "*", extras = ["llm"] }
+evaluate = "*"
+sacrebleu = "*"
+rouge-score = "*"
+nltk = "*"
+bertviz = "*"
+
+# JupyterLab PyPI Extensions
+jupyterlab-nvdashboard = "*"
+jupyterlab-tensorboard-pro = "*"
+
+# Notebook tools
+nbparameterise = "*"
+scrapbook = "*"
+mkdocs-marimo = "*"
+jupyter-marimo-proxy = "*"
+
+# APIs & Utilities
+openai = "*"
+anthropic = "*"
+gradio = "*"
+pydot = "*"
+nvidia-ml-py3 = "*"
+numexpr = "*"
+
+# Local LLM Inference
+llama-cpp-python = "*"
+gguf = "*"
+ollama = "*"
+
+# Multimodal
+protobuf = "*"
+timm = "*"
+opencv-python = "*"
+
+[tasks]
+verify-cuda = "cuda-test"
+verify-pytorch = "python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"CUDA version: {torch.version.cuda}\") if torch.cuda.is_available() else print(\"No GPU access\")'"
+verify-env = "python -c 'import sys; import torch; print(f\"Python: {sys.version}\"); print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\")'"
+verify-mcp = "python -c 'from jupyter_mcp_server.__version__ import __version__; print(f\"MCP Server: {__version__}\")'"
+verify-mcp-endpoint = "curl -sf http://localhost:8888/mcp/healthz && echo 'MCP endpoint OK' || echo 'MCP endpoint not responding (is JupyterLab running?)'"
+verify-llm = "bash -c 'pip show unsloth unsloth-zoo trl peft transformers | grep -E \"^(Name|Version):\" && echo \"LLM stack OK\"'"
+verify-multimodal = "python -c 'import timm; import cv2; print(\"Multimodal deps OK\")'"
+verify-papermill = "python -c 'import papermill; print(f\"Papermill: {papermill.__version__}\")'"
+verify-marimo = "python -c 'import marimo; print(f\"marimo: {marimo.__version__}\")'"
+verify-duckdb = "python -c 'import duckdb; print(f\"DuckDB: {duckdb.__version__}\")'"
+verify-altair = "python -c 'import altair; import vegafusion; print(f\"Altair: {altair.__version__}, VegaFusion: {vegafusion.__version__}\")'"
+verify-ollama = "python -c 'import ollama; print(\"Ollama client OK\")'"
+verify-evidently = "python -c 'from evidently import Report, Dataset; from evidently.descriptors import LLMEval; print(\"Evidently LLM OK\")'"
+verify-langchain-classic = "python -c 'from langchain_classic.chains import LLMChain; print(\"LangChain Classic OK\")'"
+verify-vllm = "python -c 'import vllm; print(f\"vLLM: {vllm.__version__}\")'"
+verify-fast-inference = "python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); import vllm; print(f\"vLLM: {vllm.__version__}\"); from unsloth import FastLanguageModel; print(\"fast_inference support: OK\")'"
+
+# JupyterLab startup with optional token authentication
+start-jupyter = "bash -c 'if [ -n \"${JUPYTER_TOKEN_FILE:-}\" ] && [ -f \"${JUPYTER_TOKEN_FILE}\" ]; then TOKEN=$(cat \"${JUPYTER_TOKEN_FILE}\"); jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/workspace --IdentityProvider.token=\"$TOKEN\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True --ServerApp.disable_check_xsrf=True; else jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --notebook-dir=/workspace --IdentityProvider.token=\"\" --ServerApp.password=\"\" --ServerApp.allow_origin=\"*\" --ServerApp.base_url=\"/\" --ServerApp.allow_root=True --ServerApp.disable_check_xsrf=True; fi'"
+
+[environments]
+default = { features = [], solve-group = "default" }

@@ -1,0 +1,24 @@
+# COPR + external desktop packages (CoolerControl, Ghostty, Nerd Fonts, WinBoat)
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      # CoolerControl
+      - |
+        dnf5 copr enable -y coolercontrol/coolercontrol
+        dnf5 install -y coolercontrol
+        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:coolercontrol:coolercontrol.enabled=0"
+      # Ghostty
+      - |
+        dnf5 copr enable -y pgdev/ghostty
+        dnf5 install -y ghostty
+        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:pgdev:ghostty.enabled=0"
+      # Nerd Fonts (from Terra repo)
+      - |
+        dnf5 install -y --enable-repo="terra" nerd-fonts 2>/dev/null || echo "Nerd Fonts not available, skipping"
+      # WinBoat
+      - |
+        dnf5 copr enable -y smswim/winboat
+        dnf5 install -y winboat
+        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:smswim:winboat.enabled=0"

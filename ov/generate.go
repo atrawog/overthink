@@ -20,12 +20,28 @@ type Generator struct {
 // resolveUserContext detects existing user in base image or uses configured values
 func (g *Generator) resolveUserContext(img *ResolvedImage) error {
 	if !img.IsExternalBase {
-		// Internal base - inherit from parent
+		// Internal base - inherit from parent, but respect explicit overrides
 		parentImg := g.Images[img.Base]
-		img.Home = parentImg.Home
-		img.User = parentImg.User
-		img.UID = parentImg.UID
-		img.GID = parentImg.GID
+		origCfg := g.Config.Images[img.Name]
+
+		if origCfg.User == "" {
+			img.User = parentImg.User
+		}
+		if origCfg.UID == nil {
+			img.UID = parentImg.UID
+		}
+		if origCfg.GID == nil {
+			img.GID = parentImg.GID
+		}
+
+		// Resolve home directory
+		if img.User == "root" {
+			img.Home = "/root"
+		} else if origCfg.User == "" && origCfg.UID == nil {
+			img.Home = parentImg.Home
+		} else {
+			img.Home = fmt.Sprintf("/home/%s", img.User)
+		}
 		return nil
 	}
 
@@ -158,11 +174,16 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		if manifest != "" {
 			b.WriteString(fmt.Sprintf("FROM ghcr.io/prefix-dev/pixi:latest AS %s-pixi-build\n", layerName))
 			b.WriteString(fmt.Sprintf("WORKDIR %s\n", img.Home))
+			if layer.HasPixiLock {
+				b.WriteString(fmt.Sprintf("COPY layers/%s/pixi.lock pixi.lock\n", layerName))
+			}
 			b.WriteString(fmt.Sprintf("COPY layers/%s/%s %s\n", layerName, manifest, manifest))
 			if manifest == "environment.yml" {
 				b.WriteString(fmt.Sprintf("RUN pixi project import %s && pixi install\n", manifest))
 			} else if manifest == "pyproject.toml" {
 				b.WriteString("RUN pixi install --manifest-path pyproject.toml\n")
+			} else if layer.HasPixiLock {
+				b.WriteString("RUN pixi install --frozen\n")
 			} else {
 				b.WriteString("RUN pixi install\n")
 			}

@@ -11,7 +11,7 @@ func TestScanLayers(t *testing.T) {
 		t.Fatalf("ScanLayers() error = %v", err)
 	}
 
-	expectedLayers := []string{"pixi", "python", "nodejs", "cargo-tool", "webservice"}
+	expectedLayers := []string{"pixi", "python", "nodejs", "cargo-tool", "webservice", "pixi-locked"}
 	for _, name := range expectedLayers {
 		if _, ok := layers[name]; !ok {
 			t.Errorf("missing layer %q", name)
@@ -141,8 +141,8 @@ func TestLayerNames(t *testing.T) {
 	}
 
 	names := LayerNames(layers)
-	if len(names) != 5 {
-		t.Errorf("LayerNames() returned %d names, want 5", len(names))
+	if len(names) != 6 {
+		t.Errorf("LayerNames() returned %d names, want 6", len(names))
 	}
 
 	// Should be sorted
@@ -260,6 +260,50 @@ func TestLayerRouteNone(t *testing.T) {
 	}
 	if route != nil {
 		t.Errorf("Route() = %v, want nil", route)
+	}
+}
+
+func TestLayerPixiLocked(t *testing.T) {
+	layers, err := ScanLayers("testdata")
+	if err != nil {
+		t.Fatalf("ScanLayers() error = %v", err)
+	}
+
+	locked := layers["pixi-locked"]
+	if locked == nil {
+		t.Fatal("pixi-locked layer not found")
+	}
+
+	if !locked.HasPixiToml {
+		t.Error("pixi-locked should have pixi.toml")
+	}
+	if !locked.HasPixiLock {
+		t.Error("pixi-locked should have pixi.lock")
+	}
+	if locked.PixiManifest() != "pixi.toml" {
+		t.Errorf("pixi-locked.PixiManifest() = %q, want %q", locked.PixiManifest(), "pixi.toml")
+	}
+	if !reflect.DeepEqual(locked.Depends, []string{"pixi"}) {
+		t.Errorf("pixi-locked.Depends = %v, want [pixi]", locked.Depends)
+	}
+}
+
+func TestLayerPixiNoLock(t *testing.T) {
+	layers, err := ScanLayers("testdata")
+	if err != nil {
+		t.Fatalf("ScanLayers() error = %v", err)
+	}
+
+	python := layers["python"]
+	if python == nil {
+		t.Fatal("python layer not found")
+	}
+
+	if !python.HasPixiToml {
+		t.Error("python should have pixi.toml")
+	}
+	if python.HasPixiLock {
+		t.Error("python should not have pixi.lock")
 	}
 }
 

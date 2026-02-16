@@ -1,0 +1,7 @@
+# Ollama LLM inference server
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - curl -fsSL https://ollama.com/install.sh | sh

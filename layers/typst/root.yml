@@ -1,0 +1,15 @@
+# Typst document processor binary
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - |
+        ARCH=$(uname -m)
+        case "$ARCH" in x86_64) ARCH=x86_64;; aarch64) ARCH=aarch64;; *) echo "Unsupported arch: $ARCH"; exit 1;; esac
+        VER=$(curl -fsSL https://api.github.com/repos/typst/typst/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+        curl -fsSL "https://github.com/typst/typst/releases/download/v${VER}/typst-${ARCH}-unknown-linux-musl.tar.xz" -o /tmp/typst.tar.xz
+        tar -xJf /tmp/typst.tar.xz -C /tmp/
+        find /tmp -name "typst" -type f -executable | head -1 | xargs -I{} mv {} /usr/local/bin/typst
+        chmod +x /usr/local/bin/typst
+        rm -rf /tmp/typst.tar.xz /tmp/typst-*

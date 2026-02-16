@@ -30,8 +30,8 @@ type ImageConfig struct {
 	Layers    []string     `json:"layers,omitempty"`
 	Ports     []string     `json:"ports,omitempty"` // runtime port mappings ["host:container"]
 	User      string       `json:"user,omitempty"`  // username (default: "user")
-	UID       int          `json:"uid,omitempty"`    // user ID (default: 1000)
-	GID       int          `json:"gid,omitempty"`    // group ID (default: 1000)
+	UID       *int         `json:"uid,omitempty"`   // user ID (default: 1000)
+	GID       *int         `json:"gid,omitempty"`   // group ID (default: 1000)
 	Merge     *MergeConfig `json:"merge,omitempty"`  // layer merge settings
 }
 
@@ -166,22 +166,10 @@ func (c *Config) ResolveImage(name string, calverTag string) (*ResolvedImage, er
 	}
 
 	// Resolve UID: image -> defaults -> 1000
-	resolved.UID = img.UID
-	if resolved.UID == 0 {
-		resolved.UID = c.Defaults.UID
-	}
-	if resolved.UID == 0 {
-		resolved.UID = 1000
-	}
+	resolved.UID = resolveIntPtr(img.UID, c.Defaults.UID, 1000)
 
 	// Resolve GID: image -> defaults -> 1000
-	resolved.GID = img.GID
-	if resolved.GID == 0 {
-		resolved.GID = c.Defaults.GID
-	}
-	if resolved.GID == 0 {
-		resolved.GID = 1000
-	}
+	resolved.GID = resolveIntPtr(img.GID, c.Defaults.GID, 1000)
 
 	// Resolve merge config: image -> defaults -> nil
 	if img.Merge != nil {
@@ -191,7 +179,11 @@ func (c *Config) ResolveImage(name string, calverTag string) (*ResolvedImage, er
 	}
 
 	// Home directory will be resolved later (after inspecting base image)
-	resolved.Home = fmt.Sprintf("/home/%s", resolved.User)
+	if resolved.User == "root" {
+		resolved.Home = "/root"
+	} else {
+		resolved.Home = fmt.Sprintf("/home/%s", resolved.User)
+	}
 
 	// Compute full tag
 	if resolved.Registry != "" {
@@ -225,6 +217,22 @@ func (c *Config) ImageNames() []string {
 	// Sort for deterministic output
 	sortStrings(names)
 	return names
+}
+
+// resolveIntPtr resolves a *int value through fallback chain: value -> fallback -> defaultVal
+func resolveIntPtr(value, fallback *int, defaultVal int) int {
+	if value != nil {
+		return *value
+	}
+	if fallback != nil {
+		return *fallback
+	}
+	return defaultVal
+}
+
+// intPtr returns a pointer to an int value
+func intPtr(v int) *int {
+	return &v
 }
 
 // sortStrings sorts a slice of strings in place

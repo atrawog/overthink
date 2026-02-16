@@ -1,0 +1,29 @@
+# OS system configuration - SDDM/KDE, services, cleanup, initramfs
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      # System configuration (SDDM, KDE, etc.)
+      - |
+        # Remove gaming-specific configs if present
+        rm -f /usr/share/applications/steam.desktop 2>/dev/null || true
+        rm -f /usr/share/applications/lutris.desktop 2>/dev/null || true
+      # Enable systemd services
+      - |
+        systemctl preset-all 2>/dev/null || true
+      # Fix /opt directory permissions for rpm-ostree
+      - |
+        if [ -L /opt ] && [ -d /var/opt ]; then
+          # Move contents from /var/opt to /usr/lib/opt and create tmpfiles.d entries
+          mkdir -p /usr/lib/opt
+          for dir in /var/opt/*/; do
+            [ -d "$dir" ] && cp -a "$dir" /usr/lib/opt/ || true
+          done
+        fi
+      # Rebuild initramfs
+      - |
+        if command -v dracut &>/dev/null; then
+          KERNEL_VERSION=$(ls /usr/lib/modules/ | sort -V | tail -1)
+          [ -n "$KERNEL_VERSION" ] && dracut --force --kver "$KERNEL_VERSION" 2>/dev/null || true
+        fi

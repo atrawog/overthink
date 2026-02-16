@@ -1,0 +1,14 @@
+# actionlint binary download
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - |
+        ARCH=$(uname -m)
+        case "$ARCH" in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; *) echo "Unsupported arch: $ARCH"; exit 1;; esac
+        URL=$(curl -fsSL https://api.github.com/repos/rhysd/actionlint/releases/latest | grep "browser_download_url.*linux_${ARCH}.tar.gz\"" | cut -d'"' -f4)
+        curl -fsSL "$URL" -o /tmp/actionlint.tar.gz
+        tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin/ actionlint
+        chmod +x /usr/local/bin/actionlint
+        rm -f /tmp/actionlint.tar.gz

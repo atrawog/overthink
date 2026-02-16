@@ -1,0 +1,22 @@
+# Build Toolchain - Compilers and build systems
+autoconf
+automake
+binutils
+bison
+ccache
+cli11-devel
+cmake
+flex
+gcc
+gcc-c++
+gdb
+glibc-devel
+libtool
+make
+ninja-build
+pkgconf
+pkgconf-m4
+pkgconf-pkg-config
+redhat-rpm-config
+rpm-build
+rpm-sign

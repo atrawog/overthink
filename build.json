@@ -28,6 +28,69 @@
       "base": "fedora",
       "layers": ["traefik", "testapi"],
       "ports": ["8000:8000", "8080:8080"]
+    },
+    "pod-base": {
+      "layers": [
+        "pixi", "python", "nodejs", "rust",
+        "build-toolchain", "language-runtimes", "dev-tools",
+        "ujust", "docker-ce", "kubernetes", "claude-code",
+        "supervisord"
+      ],
+      "platforms": ["linux/amd64"]
+    },
+    "pod-nvidia": {
+      "base": "pod-base",
+      "layers": ["nvidia-cuda"],
+      "platforms": ["linux/amd64"]
+    },
+    "pod-nvidia-python": {
+      "base": "pod-nvidia",
+      "layers": ["nvidia-python"],
+      "platforms": ["linux/amd64"]
+    },
+    "pod-jupyter": {
+      "base": "pod-nvidia-python",
+      "layers": ["jupyter"],
+      "ports": ["8888:8888"],
+      "platforms": ["linux/amd64"]
+    },
+    "pod-ollama": {
+      "base": "pod-nvidia",
+      "layers": ["ollama"],
+      "ports": ["11434:11434"],
+      "platforms": ["linux/amd64"]
+    },
+    "pod-comfyui": {
+      "base": "pod-nvidia-python",
+      "layers": ["comfyui"],
+      "ports": ["8188:8188"],
+      "platforms": ["linux/amd64"]
+    },
+    "pod-sandbox": {
+      "base": "pod-base",
+      "layers": ["pre-commit", "google-cloud", "google-cloud-npm", "devops-tools", "grafana-tools"],
+      "platforms": ["linux/amd64"]
+    },
+    "pod-githubrunner": {
+      "base": "pod-base",
+      "layers": ["github-runner"],
+      "platforms": ["linux/amd64"],
+      "uid": 0,
+      "gid": 0,
+      "user": "root"
+    },
+    "bazzite-ai": {
+      "base": "ghcr.io/ublue-os/bazzite-nvidia-open:stable-43.20260120.1",
+      "bootc": true,
+      "platforms": ["linux/amd64"],
+      "layers": [
+        "build-toolchain", "language-runtimes", "ujust", "dev-tools",
+        "github-actions", "virtualization", "kubernetes", "docker-ce",
+        "google-cloud", "vr-streaming", "nvidia-cuda",
+        "devops-tools", "grafana-tools",
+        "desktop-apps", "vscode", "typst", "copr-desktop",
+        "os-config", "os-system-files"
+      ]
     }
   }
 }

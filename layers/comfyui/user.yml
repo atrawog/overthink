@@ -1,0 +1,8 @@
+# ComfyUI installation
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - git clone https://github.com/comfyanonymous/ComfyUI.git ~/ComfyUI || true
+      - git clone https://github.com/ltdrdata/ComfyUI-Manager.git ~/ComfyUI/custom_nodes/ComfyUI-Manager || true

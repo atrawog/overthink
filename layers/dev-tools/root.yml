@@ -1,0 +1,10 @@
+# git-lfs needs special handling - scriptlet bypass
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      # Install git-lfs WITHOUT running its problematic %post scriptlet
+      - dnf5 install -y --setopt=tsflags=noscripts git-lfs
+      # Configure git-lfs manually (what the scriptlet would have done)
+      - /usr/bin/git-lfs install --system --skip-repo 2>/dev/null || true

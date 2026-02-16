@@ -1,0 +1,21 @@
+# Container build tools
+skopeo
+jq
+libcap
+
+# ISO build tools
+util-linux-script
+
+# osbuild dependencies
+osbuild-selinux
+qemu-img
+systemd-container
+
+# QEMU for VM-based builds
+qemu-kvm
+openssh-clients
+cloud-utils-growpart
+genisoimage
+passt
+guestfs-tools
+libguestfs-xfs

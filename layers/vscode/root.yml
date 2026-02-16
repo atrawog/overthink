@@ -1,0 +1,17 @@
+# VS Code from Microsoft repo
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - |
+        rpm --import https://packages.microsoft.com/keys/microsoft.asc
+        cat > /etc/yum.repos.d/vscode.repo << 'REPO'
+        [code]
+        name=Visual Studio Code
+        baseurl=https://packages.microsoft.com/yumrepos/vscode
+        enabled=1
+        gpgcheck=1
+        gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+        REPO
+        dnf5 install -y code

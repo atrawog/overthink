@@ -1,0 +1,13 @@
+# k3d binary download
+version: '3'
+
+tasks:
+  install:
+    vars:
+      K3D_VERSION: "v5.8.3"
+    cmds:
+      - |
+        ARCH=$(uname -m)
+        case "$ARCH" in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; *) echo "Unsupported arch: $ARCH"; exit 1;; esac
+        curl -fsSL "https://github.com/k3d-io/k3d/releases/download/{{.K3D_VERSION}}/k3d-linux-${ARCH}" -o /usr/bin/k3d
+        chmod +x /usr/bin/k3d

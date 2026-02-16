@@ -1,0 +1,16 @@
+# Google Cloud SDK installation
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - |
+        curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz" \
+          -o /tmp/google-cloud-sdk.tar.gz
+        mkdir -p /var/opt
+        tar -xzf /tmp/google-cloud-sdk.tar.gz -C /var/opt/
+        rm -f /tmp/google-cloud-sdk.tar.gz
+        /var/opt/google-cloud-sdk/install.sh --quiet --usage-reporting false --command-completion false --path-update false
+        for cmd in gcloud gsutil bq; do
+          ln -sf /var/opt/google-cloud-sdk/bin/$cmd /usr/bin/$cmd
+        done

@@ -1,0 +1,33 @@
+# Just task runner + ujust wrapper
+version: '3'
+
+tasks:
+  install:
+    vars:
+      JUST_VERSION: "1.46.0"
+    cmds:
+      - |
+        ARCH=$(uname -m)
+        case "$ARCH" in x86_64) ARCH_SUFFIX="x86_64";; aarch64) ARCH_SUFFIX="aarch64";; esac
+        curl -fsSL "https://github.com/casey/just/releases/download/{{.JUST_VERSION}}/just-{{.JUST_VERSION}}-${ARCH_SUFFIX}-unknown-linux-musl.tar.gz" \
+          -o /tmp/just.tar.gz
+        mkdir -p /tmp/just-extract
+        tar -xzf /tmp/just.tar.gz -C /tmp/just-extract/
+        mv /tmp/just-extract/just /usr/bin/just
+        chmod +x /usr/bin/just
+        rm -rf /tmp/just.tar.gz /tmp/just-extract
+      # Create ujust wrapper if it doesn't exist (for pods)
+      - |
+        if [ ! -f /usr/bin/ujust ]; then
+          cat > /usr/bin/ujust << 'UJUST'
+        #!/usr/bin/bash
+        /usr/bin/just --justfile /usr/share/ublue-os/justfile "${@}"
+        UJUST
+          chmod +x /usr/bin/ujust
+          mkdir -p /usr/share/ublue-os/just
+          cat > /usr/share/ublue-os/justfile << 'JF'
+        set allow-duplicate-recipes := true
+        set ignore-comments := true
+        import "/usr/share/bazzite-ai/just/_entry.just"
+        JF
+        fi

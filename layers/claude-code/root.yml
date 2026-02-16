@@ -1,0 +1,7 @@
+# Claude Code CLI installation
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - npm install -g @anthropic-ai/claude-code

@@ -1,0 +1,2 @@
+CUDA_HOME=/usr
+LD_LIBRARY_PATH=/usr/lib64

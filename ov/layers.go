@@ -27,6 +27,7 @@ type Layer struct {
 	HasEnv            bool
 	HasPorts          bool
 	HasRoute          bool
+	HasPixiLock       bool
 	Depends           []string
 
 	// Cached file contents (loaded on demand)
@@ -89,6 +90,7 @@ func scanLayer(path string, name string) (*Layer, error) {
 	layer.HasEnv = fileExists(filepath.Join(path, "env"))
 	layer.HasPorts = fileExists(filepath.Join(path, "ports"))
 	layer.HasRoute = fileExists(filepath.Join(path, "route"))
+	layer.HasPixiLock = fileExists(filepath.Join(path, "pixi.lock"))
 
 	// Read depends file if present
 	dependsPath := filepath.Join(path, "depends")

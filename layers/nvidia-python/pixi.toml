@@ -1,0 +1,74 @@
+[workspace]
+name = "nvidia-ml-environment"
+version = "0.1.0"
+description = "NVIDIA ML/AI Python environment - shared base for all ML pods"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.13,<3.14"
+pip = "*"
+
+[pypi-dependencies]
+# === PyTorch with CUDA 13.0 (standard for all ML pods) ===
+torch = { version = ">=2.9.1", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === Memory Optimization ===
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+
+# === vLLM Inference Engine ===
+# NOTE: vLLM 0.14.0 cu130 is installed from nightly wheels in build script
+# Direct wheel: wheels.vllm.ai/nightly/cu130/vllm/
+# fast_inference with unsloth pending unsloth update to support vLLM 0.14.x API
+
+# === HuggingFace Core ===
+transformers = ">=4.57.3" # Model loading (4.57.3 fixes tokenizer bug; 5.0.0rc1 in jupyter build)
+accelerate = "*"          # Model acceleration
+safetensors = ">=0.4.2"   # Safe tensor format
+
+# === Core Numerical ===
+numpy = "<2.3"     # NumPy (constrained for numba 0.61.2 - vLLM dependency)
+scipy = "*"        # Scientific computing
+einops = ">=0.7.0" # Tensor operations
+
+# === Image Processing ===
+pillow = ">=10.0.0" # PIL/Pillow
+
+# === Video Processing ===
+av = "*" # PyAV - FFmpeg bindings (required by ComfyUI for video)
+
+# === Async & Networking ===
+aiohttp = ">=3.9.0" # Async HTTP (useful for APIs)
+
+# === Computer Vision ===
+kornia = ">=0.7.1"   # Computer vision transforms
+spandrel = ">=0.3.4" # Model upscaling
+
+# === Diffusion/SDE ===
+torchsde = "*" # Stochastic DEs (diffusion models)
+
+# === Utilities ===
+tqdm = "*"   # Progress bars
+psutil = "*" # System monitoring
+pyyaml = "*" # YAML parsing
+
+# === Configuration & Validation ===
+pydantic = ">=2.0"          # Data validation (ComfyUI & custom nodes)
+pydantic-settings = ">=2.0" # Settings management (ComfyUI non-essential deps)
+python-dotenv = "*"         # Environment variable loading (.env files)
+
+# === GGUF Tools ===
+gguf = "*" # GGUF file format handling (for model conversion)
+
+[tasks]
+verify-cuda = "python -c 'import torch; print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"CUDA version: {torch.version.cuda}\") if torch.cuda.is_available() else print(\"No GPU access\")'"
+verify-env = "python -c 'import sys; import torch; print(f\"Python: {sys.version}\"); print(f\"PyTorch: {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\")'"
+verify-transformers = "python -c 'import transformers; print(f\"Transformers: {transformers.__version__}\")'"
+verify-xformers = "python -c 'import xformers; print(f\"xformers: {xformers.__version__}\")'"
+verify-gguf = "bash -c '/opt/pixi/llama.cpp/llama-quantize --help >/dev/null 2>&1 && /opt/pixi/llama.cpp/llama-cli --version >/dev/null 2>&1 && echo \"GGUF toolchain OK\" || (echo \"GGUF toolchain FAILED\" && exit 1)'"
+verify-vllm = "python -c 'import vllm; print(f\"vLLM: {vllm.__version__}\")'"
+
+[environments]
+default = { features = [], solve-group = "default" }

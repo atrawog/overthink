@@ -1,0 +1,19 @@
+# Copy system files overlay and generate justfile imports
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      # Copy system_files to root filesystem
+      - cp -a /ctx/system_files/* / 2>/dev/null || true
+      # Copy bazzite-ai justfiles
+      - mkdir -p /usr/share/bazzite-ai/just
+      - cp -a /ctx/just/* /usr/share/bazzite-ai/just/ 2>/dev/null || true
+      # Generate 60-custom.just with bazzite-ai imports
+      - |
+        JUST_DIR="/usr/share/ublue-os/just"
+        mkdir -p "$JUST_DIR"
+        cat > "$JUST_DIR/60-custom.just" << 'IMPORTS'
+        # Auto-generated bazzite-ai imports
+        import "/usr/share/bazzite-ai/just/_entry.just"
+        IMPORTS
