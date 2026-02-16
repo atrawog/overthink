@@ -6,19 +6,31 @@ tasks:
     cmds:
       # CoolerControl
       - |
-        dnf5 copr enable -y coolercontrol/coolercontrol
-        dnf5 install -y coolercontrol
-        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:coolercontrol:coolercontrol.enabled=0"
-      # Ghostty
+        if dnf5 copr enable -y coolercontrol/coolercontrol 2>/dev/null; then
+          dnf5 install -y coolercontrol
+          dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:coolercontrol:coolercontrol.enabled=0"
+        else
+          echo "CoolerControl COPR not available for this release, skipping"
+        fi
+      # Ghostty (install deps via dnf5, then rpm --replacefiles for terminfo conflict with ncurses-term)
       - |
-        dnf5 copr enable -y pgdev/ghostty
-        dnf5 install -y ghostty
-        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:pgdev:ghostty.enabled=0"
+        if dnf5 copr enable -y pgdev/ghostty 2>/dev/null; then
+          dnf5 download ghostty --arch x86_64 --arch noarch --destdir /tmp/ghostty-rpms
+          dnf5 install -y zlib-ng
+          rpm -Uvh --replacefiles /tmp/ghostty-rpms/ghostty-*.x86_64.rpm
+          rm -rf /tmp/ghostty-rpms
+          dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:pgdev:ghostty.enabled=0"
+        else
+          echo "Ghostty COPR not available for this release, skipping"
+        fi
       # Nerd Fonts (from Terra repo)
       - |
         dnf5 install -y --enable-repo="terra" nerd-fonts 2>/dev/null || echo "Nerd Fonts not available, skipping"
       # WinBoat
       - |
-        dnf5 copr enable -y smswim/winboat
-        dnf5 install -y winboat
-        dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:smswim:winboat.enabled=0"
+        if dnf5 copr enable -y smswim/winboat 2>/dev/null; then
+          dnf5 install -y winboat
+          dnf5 config-manager setopt "copr:copr.fedorainfracloud.org:smswim:winboat.enabled=0"
+        else
+          echo "WinBoat COPR not available for this release, skipping"
+        fi

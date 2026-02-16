@@ -14,57 +14,57 @@ tasks:
   all:
     desc: Build all images (respects dependency order, auto-merges if enabled)
     preconditions:
-      - sh: command -v ov
+      - sh: test -x {{.ROOT_DIR}}/bin/ov
         msg: "ov not found -- run 'task build:ov' first"
     cmds:
-      - ov generate
+      - "{{.ROOT_DIR}}/bin/ov generate"
       - docker buildx bake -f .build/docker-bake.hcl
-      - ov merge --all
+      - "{{.ROOT_DIR}}/bin/ov merge --all"
 
   local:
     desc: Build images for host platform only (uses local docker cache, auto-merges if enabled)
     preconditions:
-      - sh: command -v ov
+      - sh: test -x {{.ROOT_DIR}}/bin/ov
         msg: "ov not found -- run 'task build:ov' first"
     vars:
       ARCH:
         sh: uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/'
     cmds:
-      - ov generate
+      - "{{.ROOT_DIR}}/bin/ov generate"
       - >-
         docker buildx bake -f .build/docker-bake.hcl
         --builder default
         --set '*.platform=linux/{{.ARCH}}'
         --load {{.CLI_ARGS}}
-      - ov merge --all
+      - "{{.ROOT_DIR}}/bin/ov merge --all"
 
   push:
     desc: Build and push all images
     cmds:
-      - ov generate
+      - "{{.ROOT_DIR}}/bin/ov generate"
       - docker buildx bake -f .build/docker-bake.hcl --push
 
   merge:
     desc: "Merge small layers in a built image. Usage: task build:merge -- <image>"
     preconditions:
-      - sh: command -v ov
+      - sh: test -x {{.ROOT_DIR}}/bin/ov
         msg: "ov not found -- run 'task build:ov' first"
     cmds:
-      - ov merge {{.CLI_ARGS}}
+      - "{{.ROOT_DIR}}/bin/ov merge {{.CLI_ARGS}}"
 
   iso:
     desc: "Build ISO disk image (bootc only). Usage: task build:iso -- <image> [tag]"
     preconditions:
-      - sh: command -v ov
+      - sh: test -x {{.ROOT_DIR}}/bin/ov
         msg: "ov not found -- run 'task build:ov' first"
       - sh: command -v podman
         msg: "podman required for disk image builds"
     cmds:
-      - ov generate
+      - "{{.ROOT_DIR}}/bin/ov generate"
       - |
         set -- {{.CLI_ARGS}}
         IMAGE="$1"; TAG="${2:-latest}"
-        IMAGE_REF=$(ov inspect --format tag "$IMAGE")
+        IMAGE_REF=$({{.ROOT_DIR}}/bin/ov inspect --format tag "$IMAGE")
         echo "Building ISO for $IMAGE_REF"
         mkdir -p output/iso
         docker save "$IMAGE_REF" | sudo podman load
@@ -83,16 +83,16 @@ tasks:
   qcow2:
     desc: "Build QCOW2 virtual machine image (bootc only). Usage: task build:qcow2 -- <image> [tag]"
     preconditions:
-      - sh: command -v ov
+      - sh: test -x {{.ROOT_DIR}}/bin/ov
         msg: "ov not found -- run 'task build:ov' first"
       - sh: command -v podman
         msg: "podman required for disk image builds"
     cmds:
-      - ov generate
+      - "{{.ROOT_DIR}}/bin/ov generate"
       - |
         set -- {{.CLI_ARGS}}
         IMAGE="$1"; TAG="${2:-latest}"
-        IMAGE_REF=$(ov inspect --format tag "$IMAGE")
+        IMAGE_REF=$({{.ROOT_DIR}}/bin/ov inspect --format tag "$IMAGE")
         echo "Building QCOW2 for $IMAGE_REF"
         mkdir -p output/qcow2
         docker save "$IMAGE_REF" | sudo podman load
@@ -111,16 +111,16 @@ tasks:
   raw:
     desc: "Build RAW disk image (bootc only). Usage: task build:raw -- <image> [tag]"
     preconditions:
-      - sh: command -v ov
+      - sh: test -x {{.ROOT_DIR}}/bin/ov
         msg: "ov not found -- run 'task build:ov' first"
       - sh: command -v podman
         msg: "podman required for disk image builds"
     cmds:
-      - ov generate
+      - "{{.ROOT_DIR}}/bin/ov generate"
       - |
         set -- {{.CLI_ARGS}}
         IMAGE="$1"; TAG="${2:-latest}"
-        IMAGE_REF=$(ov inspect --format tag "$IMAGE")
+        IMAGE_REF=$({{.ROOT_DIR}}/bin/ov inspect --format tag "$IMAGE")
         echo "Building RAW for $IMAGE_REF"
         mkdir -p output/raw
         docker save "$IMAGE_REF" | sudo podman load

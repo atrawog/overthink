@@ -173,6 +173,28 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		manifest := layer.PixiManifest()
 		if manifest != "" {
 			b.WriteString(fmt.Sprintf("FROM ghcr.io/prefix-dev/pixi:latest AS %s-pixi-build\n", layerName))
+			if layer.NeedsGit() || layer.HasPypiDeps() {
+				var aptPkgs []string
+				if layer.HasPypiDeps() {
+					aptPkgs = append(aptPkgs, "build-essential", "cmake", "ca-certificates")
+				}
+				if layer.NeedsGit() {
+					aptPkgs = append(aptPkgs, "git")
+					if !layer.HasPypiDeps() {
+						aptPkgs = append(aptPkgs, "ca-certificates")
+					}
+				}
+				// Deduplicate (ca-certificates may appear twice)
+				seen := make(map[string]bool)
+				var uniquePkgs []string
+				for _, p := range aptPkgs {
+					if !seen[p] {
+						seen[p] = true
+						uniquePkgs = append(uniquePkgs, p)
+					}
+				}
+				b.WriteString(fmt.Sprintf("RUN apt-get update && apt-get install -y --no-install-recommends %s && rm -rf /var/lib/apt/lists/*\n", strings.Join(uniquePkgs, " ")))
+			}
 			b.WriteString(fmt.Sprintf("WORKDIR %s\n", img.Home))
 			if layer.HasPixiLock {
 				b.WriteString(fmt.Sprintf("COPY layers/%s/pixi.lock pixi.lock\n", layerName))
@@ -304,13 +326,13 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		b.WriteString("COPY --from=traefik-routes /routes.yml /etc/traefik/dynamic/routes.yml\n\n")
 	}
 
+	// Bootc lint if applicable (must run as root)
+	if img.Bootc {
+		b.WriteString("RUN bootc container lint\n\n")
+	}
+
 	// Final USER directive (use UID for robustness)
 	b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
-
-	// Bootc lint if applicable
-	if img.Bootc {
-		b.WriteString("\nRUN bootc container lint\n")
-	}
 
 	// Write to file
 	imageDir := filepath.Join(g.BuildDir, imageName)
@@ -345,7 +367,8 @@ func (g *Generator) writeBootstrap(b *strings.Builder, img *ResolvedImage) {
 	} else {
 		b.WriteString("--mount=type=cache,dst=/var/cache/libdnf5,sharing=locked \\\n    ")
 	}
-	b.WriteString("ARCH=$(uname -m) && \\\n")
+	b.WriteString("{ [ -L /usr/local ] && mkdir -p \"$(readlink /usr/local)\"; mkdir -p /usr/local/bin; } && \\\n")
+	b.WriteString("    ARCH=$(uname -m) && \\\n")
 	b.WriteString("    case \"$ARCH\" in x86_64) ARCH=amd64;; aarch64) ARCH=arm64;; esac && \\\n")
 	b.WriteString("    curl -fsSL \"https://github.com/go-task/task/releases/latest/download/task_linux_${ARCH}.tar.gz\" | tar -xzf - -C /usr/local/bin task\n\n")
 
@@ -523,6 +546,8 @@ func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *R
 	// 4. package.json (user)
 	if layer.HasPackageJson {
 		if !asUser {
+			// Ensure npm prefix directory is writable by the user (may be root-owned from parent image)
+			b.WriteString(fmt.Sprintf("RUN mkdir -p %s/.npm-global && chown -R %d:%d %s/.npm-global\n", img.Home, img.UID, img.GID, img.Home))
 			b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
 			asUser = true
 		}
@@ -557,21 +582,32 @@ func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *R
 
 func (g *Generator) writeDnfInstall(b *strings.Builder, pkgs []string, coprRepos []string) {
 	b.WriteString("RUN --mount=type=cache,dst=/var/cache/libdnf5,sharing=locked \\\n")
-	b.WriteString("    dnf install")
 
-	// Add COPR repos
-	for _, repo := range coprRepos {
-		// repo is "owner/project", expand to full URL
-		parts := strings.SplitN(repo, "/", 2)
-		if len(parts) == 2 {
-			b.WriteString(fmt.Sprintf(" \\\n      --enable-repo=\"copr:copr.fedorainfracloud.org:%s:%s\"", parts[0], parts[1]))
+	// COPR repos: enable first, install, then disable
+	if len(coprRepos) > 0 {
+		for _, repo := range coprRepos {
+			parts := strings.SplitN(repo, "/", 2)
+			if len(parts) == 2 {
+				b.WriteString(fmt.Sprintf("    dnf5 copr enable -y %s/%s && \\\n", parts[0], parts[1]))
+			}
 		}
 	}
 
-	b.WriteString(" -y")
+	b.WriteString("    dnf install -y")
 	for _, pkg := range pkgs {
 		b.WriteString(fmt.Sprintf(" \\\n      %s", pkg))
 	}
+
+	// Disable COPR repos after install
+	if len(coprRepos) > 0 {
+		for _, repo := range coprRepos {
+			parts := strings.SplitN(repo, "/", 2)
+			if len(parts) == 2 {
+				b.WriteString(fmt.Sprintf(" && \\\n    dnf5 config-manager setopt \"copr:copr.fedorainfracloud.org:%s:%s.enabled=0\"", parts[0], parts[1]))
+			}
+		}
+	}
+
 	b.WriteString("\n")
 }
 

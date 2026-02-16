@@ -283,6 +283,34 @@ func ServiceLayers(layers map[string]*Layer) []*Layer {
 	return services
 }
 
+// NeedsGit returns true if the pixi manifest contains git-based dependencies
+func (l *Layer) NeedsGit() bool {
+	manifest := l.PixiManifest()
+	if manifest == "" {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(l.Path, manifest))
+	if err != nil {
+		return false
+	}
+	content := string(data)
+	// Check for PyPI git+ format and pixi { git = "..." } format
+	return strings.Contains(content, "git+") || strings.Contains(content, "{ git =")
+}
+
+// HasPypiDeps returns true if the pixi manifest has PyPI dependencies
+func (l *Layer) HasPypiDeps() bool {
+	manifest := l.PixiManifest()
+	if manifest == "" {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(l.Path, manifest))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), "[pypi-dependencies]")
+}
+
 // readLineFile reads a file and returns non-empty, non-comment lines
 func readLineFile(path string) ([]string, error) {
 	file, err := os.Open(path)

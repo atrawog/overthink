@@ -2,9 +2,6 @@ version: '3'
 
 dotenv: ['.env']
 
-env:
-  PATH: "{{.ROOT_DIR}}/bin:{{.PATH}}"
-
 includes:
   build:
     taskfile: ./taskfiles/Build.yml
