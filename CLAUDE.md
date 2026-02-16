@@ -8,9 +8,9 @@ Composable container images from a library of layers. Built on `docker buildx ba
 
 Two components with a clean split:
 
-**`ov` (Go CLI)** -- all computation. Parses `build.json`, scans `layers/`, resolves dependency graphs, validates, generates Containerfiles and HCL. Source: `ov/`. Registry inspection via go-containerregistry. Exception: `ov shell`/`ov start`/`ov stop`/`ov merge`/`ov pod` exec into `docker run`/`docker stop`/`docker save`/`docker load`/`systemctl`/`journalctl` as developer conveniences (not part of the build pipeline).
+**`ov` (Go CLI)** -- all computation. Parses `images.yaml`, scans `layers/`, resolves dependency graphs, validates, generates Containerfiles and HCL. Source: `ov/`. Registry inspection via go-containerregistry. Exception: `ov shell`/`ov start`/`ov stop`/`ov merge`/`ov pod` exec into `docker run`/`docker stop`/`docker save`/`docker load`/`systemctl`/`journalctl` as developer conveniences (not part of the build pipeline).
 
-**`task` (Taskfile)** -- all execution. Thin wrappers that call `ov` for generation, `docker`/`podman` for builds. No JSON parsing, no graph logic. Source: `Taskfile.yml` + `taskfiles/{Build,Run,Setup}.yml`.
+**`task` (Taskfile)** -- all execution. Thin wrappers that call `ov` for generation, `docker`/`podman` for builds. No YAML parsing, no graph logic. Source: `Taskfile.yml` + `taskfiles/{Build,Run,Setup}.yml`.
 
 **What gets generated** (`ov generate`):
 - `.build/docker-bake.hcl` -- one explicit target per image, fully expanded (no HCL variables/matrices)
@@ -59,42 +59,48 @@ Layers declare dependencies via a `depends` file. The generator resolves transit
 
 ## Image Definition
 
-An **image** is a named build target in `build.json`. The current configuration:
+An **image** is a named build target in `images.yaml`. Example configuration:
 
-```json
-{
-  "defaults": {
-    "registry": "ghcr.io/atrawog",
-    "tag": "auto",
-    "base": "fedora:43",
-    "platforms": ["linux/amd64", "linux/arm64"],
-    "pkg": "rpm",
-    "merge": {
-      "auto": true,
-      "max_mb": 128
-    }
-  },
-  "images": {
-    "fedora": {
-      "layers": ["pixi", "python", "nodejs", "rust", "supervisord"]
-    },
-    "ubuntu": {
-      "base": "ubuntu:24.04",
-      "layers": ["pixi", "python", "nodejs", "rust", "supervisord"],
-      "pkg": "deb"
-    },
-    "debian": {
-      "base": "debian:13",
-      "layers": ["pixi", "python", "nodejs", "rust", "supervisord"],
-      "pkg": "deb"
-    },
-    "fedora-test": {
-      "base": "fedora",
-      "layers": ["traefik", "testapi"],
-      "ports": ["8000:8000", "8080:8080"]
-    }
-  }
-}
+```yaml
+defaults:
+  registry: ghcr.io/atrawog
+  tag: auto
+  base: "quay.io/fedora/fedora:43"
+  platforms:
+    - linux/amd64
+    - linux/arm64
+  pkg: rpm
+  merge:
+    auto: true
+    max_mb: 128
+
+images:
+  fedora:
+    layers:
+      - pixi
+      - python
+      - nodejs
+      - rust
+      - supervisord
+
+  ubuntu:
+    base: "ubuntu:24.04"
+    layers:
+      - pixi
+      - python
+      - nodejs
+      - rust
+      - supervisord
+    pkg: deb
+
+  fedora-test:
+    base: fedora
+    layers:
+      - traefik
+      - testapi
+    ports:
+      - "8000:8000"
+      - "8080:8080"
 ```
 
 ### Inheritance Chain
@@ -103,7 +109,8 @@ Every setting resolves through: **image -> defaults -> hardcoded fallback** (fir
 
 | Field | Default | Description |
 |---|---|---|
-| `base` | `fedora:43` | External OCI image or name of another image in `build.json` |
+| `enabled` | `true` | Set to `false` to disable (skipped by generate, validate, list) |
+| `base` | `quay.io/fedora/fedora:43` | External OCI image or name of another image in `images.yaml` |
 | `bootc` | `false` | Adds `bootc container lint` and enables disk image builds |
 | `platforms` | `["linux/amd64", "linux/arm64"]` | Target architectures |
 | `tag` | `"auto"` | Image tag. `"auto"` for CalVer. |
@@ -114,9 +121,9 @@ Every setting resolves through: **image -> defaults -> hardcoded fallback** (fir
 | `user` | `"user"` | Username for non-root operations |
 | `uid` | `1000` | User ID |
 | `gid` | `1000` | Group ID |
-| `merge` | `null` | Layer merge settings (`{"auto": true, "max_mb": 128}`). See [Layer Merging](#layer-merging). |
+| `merge` | `null` | Layer merge settings (`auto: true, max_mb: 128`). See [Layer Merging](#layer-merging). |
 
-When `base` references another image in `build.json`, the generator resolves it to the full registry/tag and creates a build dependency. The referenced image must be built first.
+When `base` references another image in `images.yaml`, the generator resolves it to the full registry/tag and creates a build dependency. The referenced image must be built first.
 
 ---
 
@@ -151,7 +158,7 @@ Within per-layer steps, `USER <UID>` is emitted before the first user-mode step,
 
 ## User Resolution
 
-Configurable via `user`, `uid`, `gid` fields in `build.json` (defaults: `"user"`, 1000, 1000).
+Configurable via `user`, `uid`, `gid` fields in `images.yaml` (defaults: `"user"`, 1000, 1000).
 
 For external base images, `ov` calls `registry.go:InspectImageUser()` which:
 1. Pulls the base image via go-containerregistry
@@ -261,9 +268,9 @@ Override: `ov generate --tag <value>` replaces all `"auto"` resolutions.
 
 ```
 ov generate [--tag TAG]                # Write .build/ (Containerfiles + HCL)
-ov validate                            # Check build.json + layers, exit 0 or 1
+ov validate                            # Check images.yaml + layers, exit 0 or 1
 ov inspect <image> [--format FIELD]    # Print resolved config (JSON) or single field
-ov list images                         # Images from build.json
+ov list images                         # Images from images.yaml
 ov list layers                         # Layers from filesystem
 ov list targets                        # Bake targets from generated HCL
 ov list services                       # Layers with supervisord.conf
@@ -302,7 +309,7 @@ project/
 +-- ov/                                 # Go module (go 1.25.6)
 |   +-- go.mod                          # kong v1.14.0, go-containerregistry v0.20.7
 |   +-- main.go                         # CLI (Kong)
-|   +-- config.go                       # build.json parsing, inheritance resolution
+|   +-- config.go                       # images.yaml parsing, inheritance resolution
 |   +-- layers.go                       # Layer scanning, file detection
 |   +-- env.go                          # env file parsing, merging, expansion
 |   +-- graph.go                        # Topological sort (layers + images)
@@ -318,7 +325,7 @@ project/
 +-- .build/                             # Generated (gitignored)
 |   +-- docker-bake.hcl
 |   +-- <image>/Containerfile
-+-- build.json                          # Configuration
++-- images.yaml                         # Configuration
 +-- Taskfile.yml                        # Root: includes + PATH setup
 +-- taskfiles/
 |   +-- Build.yml                       # ov, all, local, push, merge, iso, qcow2, raw
@@ -378,11 +385,11 @@ Direct `ov` commands (`ov list images`, `ov validate`, etc.) don't need `task`.
 
 ## Workflows
 
-**Add a layer:** `ov new layer <name>` -> add install files + optional `depends`/`env`/`supervisord.conf` -> add to an image in `build.json` -> `task build:local -- <image>`
+**Add a layer:** `ov new layer <name>` -> add install files + optional `depends`/`env`/`supervisord.conf` -> add to an image in `images.yaml` -> `task build:local -- <image>`
 
-**Add an image:** add entry to `build.json` -> `task build:local -- <image>`
+**Add an image:** add entry to `images.yaml` -> `task build:local -- <image>`
 
-**Layer images:** set `base` to another image name in `build.json`. The generator handles dependency ordering and tag resolution.
+**Layer images:** set `base` to another image name in `images.yaml`. The generator handles dependency ordering and tag resolution.
 
 **Host bootstrap (first time):** requires `task`, `go`, `docker` with buildx. Run `task setup:all` then `task build:all`.
 
@@ -422,23 +429,19 @@ Post-build optimization: `ov merge` takes an already-built image, inspects Docke
 
 ### Configuration
 
-Add `merge` to `build.json` defaults or per-image:
+Add `merge` to `images.yaml` defaults or per-image:
 
-```json
-{
-  "defaults": {
-    "merge": {
-      "auto": true,
-      "max_mb": 128
-    }
-  }
-}
+```yaml
+defaults:
+  merge:
+    auto: true
+    max_mb: 128
 ```
 
 - **`auto`**: Enable automatic merging after builds via `ov merge --all` (default: false)
 - **`max_mb`**: Maximum size of a merged layer (MB) (default: 128)
 
-CLI flag `--max-mb` overrides `build.json`. The `auto` field is only used by `ov merge --all` to select which images to merge; `ov merge <image>` always merges regardless.
+CLI flag `--max-mb` overrides `images.yaml`. The `auto` field is only used by `ov merge --all` to select which images to merge; `ov merge <image>` always merges regardless.
 
 ### Algorithm
 
@@ -471,7 +474,7 @@ ov merge fedora --max-mb 512
 ov merge fedora --tag 2026.46.1415
 ```
 
-When `merge.auto` is set in `build.json` defaults, `task build:all` and `task build:local` automatically run `ov merge --all` after the build completes.
+When `merge.auto` is set in `images.yaml` defaults, `task build:all` and `task build:local` automatically run `ov merge --all` after the build completes.
 
 Merge is idempotent -- running again after merging shows all layers as `[keep]`.
 

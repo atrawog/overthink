@@ -10,7 +10,7 @@ import (
 
 // ShellCmd starts a bash shell in a container image
 type ShellCmd struct {
-	Image     string `arg:"" help:"Image name from build.json"`
+	Image     string `arg:"" help:"Image name from images.yaml"`
 	Workspace string `short:"w" long:"workspace" default:"." help:"Host path to mount at /workspace (default: current directory)"`
 	Tag       string `long:"tag" default:"latest" help:"Image tag to use (default: latest)"`
 }

@@ -18,7 +18,7 @@ import (
 
 // MergeCmd merges small layers in a built container image
 type MergeCmd struct {
-	Image  string `arg:"" optional:"" help:"Image name from build.json"`
+	Image  string `arg:"" optional:"" help:"Image name from images.yaml"`
 	All    bool   `long:"all" help:"Merge all images with merge.auto enabled"`
 	MaxMB  int    `long:"max-mb" help:"Maximum size of a merged layer (MB)"`
 	Tag    string `long:"tag" default:"latest" help:"Image tag to use (default: latest)"`
@@ -93,7 +93,7 @@ func (c *MergeCmd) runOne(cfg *Config, imageName string) error {
 		return err
 	}
 
-	// Determine max_mb: CLI flags -> build.json -> default
+	// Determine max_mb: CLI flags -> images.yaml -> default
 	maxMB := defaultMaxMB
 	if resolved.Merge != nil && resolved.Merge.MaxMB > 0 {
 		maxMB = resolved.Merge.MaxMB

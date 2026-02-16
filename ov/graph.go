@@ -95,7 +95,7 @@ func ResolveImageOrder(images map[string]*ResolvedImage) ([]string, error) {
 	graph := make(map[string][]string)
 	for name, img := range images {
 		if !img.IsExternalBase {
-			// base is another image in build.json
+			// base is another image in images.yaml
 			graph[name] = []string{img.Base}
 		} else {
 			graph[name] = nil

@@ -21,7 +21,7 @@ type PodCmd struct {
 
 // PodInstallCmd generates a quadlet .container file and reloads systemd
 type PodInstallCmd struct {
-	Image     string `arg:"" help:"Image name from build.json"`
+	Image     string `arg:"" help:"Image name from images.yaml"`
 	Workspace string `short:"w" long:"workspace" default:"." help:"Host path to mount at /workspace (default: current directory)"`
 	Tag       string `long:"tag" default:"latest" help:"Image tag to use (default: latest)"`
 }
@@ -96,7 +96,7 @@ func (c *PodInstallCmd) Run() error {
 
 // PodUninstallCmd removes a quadlet file and reloads systemd
 type PodUninstallCmd struct {
-	Image string `arg:"" help:"Image name from build.json"`
+	Image string `arg:"" help:"Image name from images.yaml"`
 }
 
 func (c *PodUninstallCmd) Run() error {
@@ -129,7 +129,7 @@ func (c *PodUninstallCmd) Run() error {
 
 // PodStartCmd starts the systemd service
 type PodStartCmd struct {
-	Image string `arg:"" help:"Image name from build.json"`
+	Image string `arg:"" help:"Image name from images.yaml"`
 }
 
 func (c *PodStartCmd) Run() error {
@@ -146,7 +146,7 @@ func (c *PodStartCmd) Run() error {
 
 // PodStopCmd stops the systemd service
 type PodStopCmd struct {
-	Image string `arg:"" help:"Image name from build.json"`
+	Image string `arg:"" help:"Image name from images.yaml"`
 }
 
 func (c *PodStopCmd) Run() error {
@@ -163,7 +163,7 @@ func (c *PodStopCmd) Run() error {
 
 // PodStatusCmd shows the systemd service status
 type PodStatusCmd struct {
-	Image string `arg:"" help:"Image name from build.json"`
+	Image string `arg:"" help:"Image name from images.yaml"`
 }
 
 func (c *PodStatusCmd) Run() error {
@@ -178,7 +178,7 @@ func (c *PodStatusCmd) Run() error {
 
 // PodLogsCmd shows the service logs via journalctl
 type PodLogsCmd struct {
-	Image  string `arg:"" help:"Image name from build.json"`
+	Image  string `arg:"" help:"Image name from images.yaml"`
 	Follow bool   `short:"f" long:"follow" help:"Follow log output"`
 }
 
@@ -199,10 +199,10 @@ func (c *PodLogsCmd) Run() error {
 
 // QuadletConfig holds the parameters for generating a quadlet .container file
 type QuadletConfig struct {
-	ImageName string   // image name from build.json (e.g. "fedora-test")
+	ImageName string   // image name from images.yaml (e.g. "fedora-test")
 	ImageRef  string   // full image reference (e.g. "ghcr.io/atrawog/fedora-test:latest")
 	Workspace string   // absolute host path to mount at /workspace
-	Ports     []string // port mappings from build.json (e.g. ["8000:8000", "8080:8080"])
+	Ports     []string // port mappings from images.yaml (e.g. ["8000:8000", "8080:8080"])
 }
 
 // generateQuadlet produces the contents of a quadlet .container file.
@@ -256,7 +256,7 @@ func serviceName(imageName string) string {
 
 // PodUpdateCmd re-transfers an image from Docker to Podman and restarts the service
 type PodUpdateCmd struct {
-	Image string `arg:"" help:"Image name from build.json"`
+	Image string `arg:"" help:"Image name from images.yaml"`
 	Tag   string `long:"tag" default:"latest" help:"Image tag to use (default: latest)"`
 }
 

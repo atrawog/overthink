@@ -20,7 +20,7 @@ func TestGenerateBakeHCL_InternalBaseContexts(t *testing.T) {
 		Images: map[string]*ResolvedImage{
 			"fedora": {
 				Name:           "fedora",
-				Base:           "fedora:43",
+				Base:           "quay.io/fedora/fedora:43",
 				IsExternalBase: true,
 				Registry:       "ghcr.io/atrawog",
 				Tag:            "2026.46.1415",

@@ -78,6 +78,9 @@ func validatePkgValues(cfg *Config, errs *ValidationError) {
 	}
 
 	for name, img := range cfg.Images {
+		if !img.IsEnabled() {
+			continue
+		}
 		if img.Pkg != "" && img.Pkg != "rpm" && img.Pkg != "deb" {
 			errs.Add("image %q: pkg must be \"rpm\" or \"deb\", got %q", name, img.Pkg)
 		}
@@ -87,6 +90,9 @@ func validatePkgValues(cfg *Config, errs *ValidationError) {
 // validateLayerReferences ensures all layers referenced in images exist
 func validateLayerReferences(cfg *Config, layers map[string]*Layer, errs *ValidationError) {
 	for imageName, img := range cfg.Images {
+		if !img.IsEnabled() {
+			continue
+		}
 		for _, layerName := range img.Layers {
 			if _, ok := layers[layerName]; !ok {
 				// Check for typo suggestions
@@ -165,7 +171,7 @@ func validateCoprUsage(cfg *Config, layers map[string]*Layer, errs *ValidationEr
 func validateBaseReferences(cfg *Config, errs *ValidationError) {
 	// Base references can be:
 	// 1. External OCI images (always valid)
-	// 2. Names of other images in build.json (validated by image DAG check)
+	// 2. Names of other images in images.yaml (validated by image DAG check)
 	// No additional validation needed here
 }
 
@@ -192,6 +198,9 @@ func validateImageDAG(cfg *Config, errs *ValidationError) {
 func validateLayerDAG(cfg *Config, layers map[string]*Layer, errs *ValidationError) {
 	// Check each image's layers for cycles
 	for imageName, img := range cfg.Images {
+		if !img.IsEnabled() {
+			continue
+		}
 		_, err := ResolveLayerOrder(img.Layers, layers, nil)
 		if err != nil {
 			if cycleErr, ok := err.(*CycleError); ok {
@@ -248,6 +257,9 @@ func validatePorts(cfg *Config, layers map[string]*Layer, errs *ValidationError)
 		validatePortMappings("defaults", cfg.Defaults.Ports)
 	}
 	for name, img := range cfg.Images {
+		if !img.IsEnabled() {
+			continue
+		}
 		if len(img.Ports) > 0 {
 			validatePortMappings(name, img.Ports)
 		}
@@ -278,6 +290,9 @@ func validateRoutes(cfg *Config, layers map[string]*Layer, errs *ValidationError
 
 	// For each image with route layers, traefik must be reachable
 	for imageName, img := range cfg.Images {
+		if !img.IsEnabled() {
+			continue
+		}
 		hasRoute := false
 		hasTraefik := false
 
@@ -317,6 +332,9 @@ func validateMergeConfig(cfg *Config, errs *ValidationError) {
 
 	check("defaults", cfg.Defaults.Merge)
 	for name, img := range cfg.Images {
+		if !img.IsEnabled() {
+			continue
+		}
 		check(fmt.Sprintf("image %q", name), img.Merge)
 	}
 }

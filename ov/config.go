@@ -1,38 +1,53 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 )
 
-// Config represents the build.json configuration file
+// Config represents the images.yaml configuration file
 type Config struct {
-	Defaults ImageConfig            `json:"defaults"`
-	Images   map[string]ImageConfig `json:"images"`
+	Defaults ImageConfig            `yaml:"defaults"`
+	Images   map[string]ImageConfig `yaml:"images"`
 }
 
 // MergeConfig configures post-build layer merging
 type MergeConfig struct {
-	Auto  bool `json:"auto,omitempty"`   // enable automatic merging after builds
-	MaxMB int  `json:"max_mb,omitempty"` // maximum size of a merged layer (default: 1024)
+	Auto  bool `yaml:"auto,omitempty"`   // enable automatic merging after builds
+	MaxMB int  `yaml:"max_mb,omitempty"` // maximum size of a merged layer (default: 1024)
 }
 
 // ImageConfig represents configuration for a single image or defaults
 type ImageConfig struct {
-	Base      string       `json:"base,omitempty"`
-	Bootc     bool         `json:"bootc,omitempty"`
-	Platforms []string     `json:"platforms,omitempty"`
-	Tag       string       `json:"tag,omitempty"`
-	Registry  string       `json:"registry,omitempty"`
-	Pkg       string       `json:"pkg,omitempty"`
-	Layers    []string     `json:"layers,omitempty"`
-	Ports     []string     `json:"ports,omitempty"` // runtime port mappings ["host:container"]
-	User      string       `json:"user,omitempty"`  // username (default: "user")
-	UID       *int         `json:"uid,omitempty"`   // user ID (default: 1000)
-	GID       *int         `json:"gid,omitempty"`   // group ID (default: 1000)
-	Merge     *MergeConfig `json:"merge,omitempty"`  // layer merge settings
+	Enabled   *bool        `yaml:"enabled,omitempty"`
+	Base      string       `yaml:"base,omitempty"`
+	Bootc     bool         `yaml:"bootc,omitempty"`
+	Platforms []string     `yaml:"platforms,omitempty"`
+	Tag       string       `yaml:"tag,omitempty"`
+	Registry  string       `yaml:"registry,omitempty"`
+	Pkg       string       `yaml:"pkg,omitempty"`
+	Layers    []string     `yaml:"layers,omitempty"`
+	Ports     []string     `yaml:"ports,omitempty"` // runtime port mappings ["host:container"]
+	User      string       `yaml:"user,omitempty"`  // username (default: "user")
+	UID       *int         `yaml:"uid,omitempty"`   // user ID (default: 1000)
+	GID       *int         `yaml:"gid,omitempty"`   // group ID (default: 1000)
+	Merge     *MergeConfig `yaml:"merge,omitempty"` // layer merge settings
+}
+
+// IsEnabled returns true if the image is enabled (nil defaults to true)
+func (ic *ImageConfig) IsEnabled() bool {
+	if ic.Enabled == nil {
+		return true
+	}
+	return *ic.Enabled
+}
+
+// boolPtr returns a pointer to a bool value
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 // ResolvedImage represents a fully resolved image configuration
@@ -61,17 +76,17 @@ type ResolvedImage struct {
 	FullTag        string // registry/name:tag
 }
 
-// LoadConfig reads and parses build.json from the given directory
+// LoadConfig reads and parses images.yaml from the given directory
 func LoadConfig(dir string) (*Config, error) {
-	path := filepath.Join(dir, "build.json")
+	path := filepath.Join(dir, "images.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading build.json: %w", err)
+		return nil, fmt.Errorf("reading images.yaml: %w", err)
 	}
 
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing build.json: %w", err)
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parsing images.yaml: %w", err)
 	}
 
 	return &cfg, nil
@@ -81,24 +96,27 @@ func LoadConfig(dir string) (*Config, error) {
 func (c *Config) ResolveImage(name string, calverTag string) (*ResolvedImage, error) {
 	img, ok := c.Images[name]
 	if !ok {
-		return nil, fmt.Errorf("image %q not found in build.json", name)
+		return nil, fmt.Errorf("image %q not found in images.yaml", name)
+	}
+	if !img.IsEnabled() {
+		return nil, fmt.Errorf("image %q is disabled", name)
 	}
 
 	resolved := &ResolvedImage{
 		Name: name,
 	}
 
-	// Resolve base: image -> defaults -> "fedora:43"
+	// Resolve base: image -> defaults -> "quay.io/fedora/fedora:43"
 	resolved.Base = img.Base
 	if resolved.Base == "" {
 		resolved.Base = c.Defaults.Base
 	}
 	if resolved.Base == "" {
-		resolved.Base = "fedora:43"
+		resolved.Base = "quay.io/fedora/fedora:43"
 	}
 
-	// Check if base is internal (another image in build.json) or external
-	if _, isInternal := c.Images[resolved.Base]; isInternal {
+	// Check if base is internal (another enabled image in images.yaml) or external
+	if baseImg, isInternal := c.Images[resolved.Base]; isInternal && baseImg.IsEnabled() {
 		resolved.IsExternalBase = false
 	} else {
 		resolved.IsExternalBase = true
@@ -195,23 +213,29 @@ func (c *Config) ResolveImage(name string, calverTag string) (*ResolvedImage, er
 	return resolved, nil
 }
 
-// ResolveAllImages resolves all images in the config
+// ResolveAllImages resolves all enabled images in the config
 func (c *Config) ResolveAllImages(calverTag string) (map[string]*ResolvedImage, error) {
 	resolved := make(map[string]*ResolvedImage)
-	for name := range c.Images {
-		img, err := c.ResolveImage(name, calverTag)
+	for name, img := range c.Images {
+		if !img.IsEnabled() {
+			continue
+		}
+		ri, err := c.ResolveImage(name, calverTag)
 		if err != nil {
 			return nil, err
 		}
-		resolved[name] = img
+		resolved[name] = ri
 	}
 	return resolved, nil
 }
 
-// ImageNames returns a sorted list of image names
+// ImageNames returns a sorted list of enabled image names
 func (c *Config) ImageNames() []string {
 	names := make([]string, 0, len(c.Images))
-	for name := range c.Images {
+	for name, img := range c.Images {
+		if !img.IsEnabled() {
+			continue
+		}
 		names = append(names, name)
 	}
 	// Sort for deterministic output

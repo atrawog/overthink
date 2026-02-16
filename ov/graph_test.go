@@ -111,12 +111,12 @@ func TestResolveImageOrder(t *testing.T) {
 	images := map[string]*ResolvedImage{
 		"base": {
 			Name:           "base",
-			Base:           "fedora:43",
+			Base:           "quay.io/fedora/fedora:43",
 			IsExternalBase: true,
 		},
 		"cuda": {
 			Name:           "cuda",
-			Base:           "fedora:43",
+			Base:           "quay.io/fedora/fedora:43",
 			IsExternalBase: true,
 		},
 		"ml-cuda": {
@@ -175,7 +175,7 @@ func TestLayersProvidedByImage(t *testing.T) {
 	images := map[string]*ResolvedImage{
 		"base": {
 			Name:           "base",
-			Base:           "fedora:43",
+			Base:           "quay.io/fedora/fedora:43",
 			IsExternalBase: true,
 			Layers:         []string{"pixi"},
 		},

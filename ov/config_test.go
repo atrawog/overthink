@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -49,7 +50,7 @@ func TestResolveImage(t *testing.T) {
 			name:           "base image inherits defaults",
 			imageName:      "base",
 			calverTag:      "2026.45.1415",
-			wantBase:       "fedora:43",
+			wantBase:       "quay.io/fedora/fedora:43",
 			wantIsExternal: true,
 			wantPkg:        "rpm",
 			wantTag:        "2026.45.1415", // auto -> calver
@@ -60,7 +61,7 @@ func TestResolveImage(t *testing.T) {
 			name:           "cuda overrides platforms",
 			imageName:      "cuda",
 			calverTag:      "2026.45.1415",
-			wantBase:       "fedora:43",
+			wantBase:       "quay.io/fedora/fedora:43",
 			wantIsExternal: true,
 			wantPkg:        "rpm",
 			wantTag:        "2026.45.1415",
@@ -161,8 +162,9 @@ func TestImageNames(t *testing.T) {
 	}
 
 	names := cfg.ImageNames()
+	// 7 total images in testdata, but disabled-image is excluded
 	if len(names) != 6 {
-		t.Errorf("ImageNames() returned %d names, want 6", len(names))
+		t.Errorf("ImageNames() returned %d names, want 6: %v", len(names), names)
 	}
 
 	// Should be sorted
@@ -170,6 +172,13 @@ func TestImageNames(t *testing.T) {
 		if names[i] > names[i+1] {
 			t.Errorf("ImageNames() not sorted: %v", names)
 			break
+		}
+	}
+
+	// disabled-image should not appear
+	for _, name := range names {
+		if name == "disabled-image" {
+			t.Error("ImageNames() should not include disabled-image")
 		}
 	}
 }
@@ -233,5 +242,52 @@ func TestFullTag(t *testing.T) {
 	want := "ghcr.io/test/base:2026.45.1415"
 	if resolved.FullTag != want {
 		t.Errorf("FullTag = %q, want %q", resolved.FullTag, want)
+	}
+}
+
+func TestEnabledField(t *testing.T) {
+	cfg, err := LoadConfig("testdata")
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	// disabled-image exists in raw config
+	disabledImg, ok := cfg.Images["disabled-image"]
+	if !ok {
+		t.Fatal("disabled-image not found in raw config")
+	}
+	if disabledImg.IsEnabled() {
+		t.Error("disabled-image should not be enabled")
+	}
+
+	// disabled-image is excluded from ImageNames()
+	for _, name := range cfg.ImageNames() {
+		if name == "disabled-image" {
+			t.Error("disabled-image should not appear in ImageNames()")
+		}
+	}
+
+	// disabled-image is excluded from ResolveAllImages()
+	all, err := cfg.ResolveAllImages("test")
+	if err != nil {
+		t.Fatalf("ResolveAllImages() error = %v", err)
+	}
+	if _, ok := all["disabled-image"]; ok {
+		t.Error("disabled-image should not appear in ResolveAllImages()")
+	}
+
+	// ResolveImage returns error for disabled image
+	_, err = cfg.ResolveImage("disabled-image", "test")
+	if err == nil {
+		t.Error("ResolveImage() should return error for disabled image")
+	}
+	if !strings.Contains(err.Error(), "disabled") {
+		t.Errorf("expected 'disabled' in error, got: %v", err)
+	}
+
+	// Enabled images still work
+	_, err = cfg.ResolveImage("base", "test")
+	if err != nil {
+		t.Errorf("ResolveImage() unexpected error for enabled image: %v", err)
 	}
 }

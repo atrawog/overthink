@@ -460,6 +460,32 @@ func TestValidateRouteWithTraefik(t *testing.T) {
 	}
 }
 
+func TestValidateSkipsDisabledImages(t *testing.T) {
+	cfg := &Config{
+		Defaults: ImageConfig{
+			Registry:  "ghcr.io/test",
+			Pkg:       "rpm",
+			Platforms: []string{"linux/amd64"},
+		},
+		Images: map[string]ImageConfig{
+			"good": {Layers: []string{"pixi"}},
+			"bad-disabled": {
+				Enabled: boolPtr(false),
+				Layers:  []string{"nonexistent-layer"},
+				Pkg:     "invalid",
+			},
+		},
+	}
+	layers := map[string]*Layer{
+		"pixi": {Name: "pixi", HasRootYml: true},
+	}
+
+	err := Validate(cfg, layers)
+	if err != nil {
+		t.Errorf("Validate() should pass when bad image is disabled, got: %v", err)
+	}
+}
+
 func TestIsValidPort(t *testing.T) {
 	tests := []struct {
 		input string

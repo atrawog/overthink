@@ -11,7 +11,7 @@ import (
 // CLI defines the command-line interface structure
 type CLI struct {
 	Generate GenerateCmd `cmd:"" help:"Write .build/ (Containerfiles + HCL)"`
-	Validate ValidateCmd `cmd:"" help:"Check build.json + layers, exit 0 or 1"`
+	Validate ValidateCmd `cmd:"" help:"Check images.yaml + layers, exit 0 or 1"`
 	Inspect  InspectCmd  `cmd:"" help:"Print resolved config for an image (JSON)"`
 	List     ListCmd     `cmd:"" help:"List components"`
 	New      NewCmd      `cmd:"" help:"Scaffold new components"`
@@ -42,7 +42,7 @@ func (c *GenerateCmd) Run() error {
 	return gen.Generate()
 }
 
-// ValidateCmd validates build.json and layers
+// ValidateCmd validates images.yaml and layers
 type ValidateCmd struct{}
 
 func (c *ValidateCmd) Run() error {
@@ -127,14 +127,14 @@ func (c *InspectCmd) Run() error {
 
 // ListCmd groups list subcommands
 type ListCmd struct {
-	Images   ListImagesCmd   `cmd:"" help:"Images from build.json"`
+	Images   ListImagesCmd   `cmd:"" help:"Images from images.yaml"`
 	Layers   ListLayersCmd   `cmd:"" help:"Layers from filesystem"`
 	Targets  ListTargetsCmd  `cmd:"" help:"Bake targets from generated HCL"`
 	Services ListServicesCmd `cmd:"" help:"Layers with supervisord.conf"`
 	Routes   ListRoutesCmd   `cmd:"" help:"Layers with route files"`
 }
 
-// ListImagesCmd lists images from build.json
+// ListImagesCmd lists images from images.yaml
 type ListImagesCmd struct{}
 
 func (c *ListImagesCmd) Run() error {
