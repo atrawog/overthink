@@ -376,8 +376,13 @@ func (g *Generator) generateContainerfile(imageName string) error {
 	}
 
 	// Process each layer
-	for _, layerName := range layerOrder {
-		g.writeLayerSteps(&b, layerName, img)
+	// Post-layer steps (supervisord, traefik, bootc) run as root,
+	// so the last layer must reset to root only if such steps exist.
+	needsRootAfter := hasServices || hasRoutes || img.Bootc
+	inUserMode := false
+	for i, layerName := range layerOrder {
+		isLast := i == len(layerOrder)-1
+		inUserMode = g.writeLayerSteps(&b, layerName, img, isLast && !needsRootAfter)
 	}
 
 	// Assemble supervisord config if needed
@@ -399,7 +404,10 @@ func (g *Generator) generateContainerfile(imageName string) error {
 	}
 
 	// Final USER directive (use UID for robustness)
-	b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
+	// Skip if already in user mode and no root steps followed
+	if !inUserMode || needsRootAfter {
+		b.WriteString(fmt.Sprintf("USER %d\n", img.UID))
+	}
 
 	// imageDir was cleaned at the start of this function; ensure it exists
 	if err := os.MkdirAll(imageDir, 0755); err != nil {
@@ -621,8 +629,11 @@ func (g *Generator) generateSupervisordFragments(imageName string, layerOrder []
 	return nil
 }
 
-// writeLayerSteps writes the RUN steps for a single layer
-func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *ResolvedImage) {
+// writeLayerSteps writes the RUN steps for a single layer.
+// skipRootReset prevents emitting USER root after user-mode steps (used for the
+// last layer when no post-layer root steps follow).
+// Returns true if the layer ended in user mode.
+func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *ResolvedImage, skipRootReset bool) bool {
 	layer := g.Layers[layerName]
 
 	b.WriteString(fmt.Sprintf("# Layer: %s\n", layerName))
@@ -662,12 +673,13 @@ func (g *Generator) writeLayerSteps(b *strings.Builder, layerName string, img *R
 		g.writeUserYml(b, layerName, img)
 	}
 
-	// Reset to root for next layer
-	if asUser {
+	// Reset to root for next layer (skip for last layer when no root steps follow)
+	if asUser && !skipRootReset {
 		b.WriteString("USER root\n")
 	}
 
 	b.WriteString("\n")
+	return asUser
 }
 
 func (g *Generator) writeDnfInstall(b *strings.Builder, rpm *RpmConfig) {
