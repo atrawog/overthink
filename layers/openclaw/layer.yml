@@ -12,6 +12,10 @@ volumes:
   - name: data
     path: "~/.openclaw"
 
+aliases:
+  - name: openclaw
+    command: openclaw
+
 service: |
   [program:openclaw]
   command=%(ENV_HOME)s/.npm-global/bin/openclaw gateway --port 18789 --bind 0.0.0.0

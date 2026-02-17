@@ -638,6 +638,146 @@ func TestValidateVolumesDuplicate(t *testing.T) {
 	}
 }
 
+func TestValidateAliasesValid(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{
+			"test": {
+				Layers:  []string{"svc"},
+				Aliases: []AliasConfig{{Name: "mycli", Command: "mycli-bin"}},
+			},
+		},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:       "svc",
+			HasUserYml: true,
+			HasAliases: true,
+			aliases:    []AliasYAML{{Name: "svc-cli", Command: "svc-cli-bin"}},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err != nil {
+		t.Errorf("Validate() unexpected error: %v", err)
+	}
+}
+
+func TestValidateAliasesMissingName(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:       "svc",
+			HasUserYml: true,
+			HasAliases: true,
+			aliases:    []AliasYAML{{Name: "", Command: "cmd"}},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for missing alias name")
+	}
+	if !strings.Contains(err.Error(), "missing required \"name\"") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateAliasesMissingCommand(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:       "svc",
+			HasUserYml: true,
+			HasAliases: true,
+			aliases:    []AliasYAML{{Name: "mycli", Command: ""}},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for missing alias command")
+	}
+	if !strings.Contains(err.Error(), "missing required \"command\"") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateAliasesDuplicate(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:       "svc",
+			HasUserYml: true,
+			HasAliases: true,
+			aliases: []AliasYAML{
+				{Name: "mycli", Command: "cmd1"},
+				{Name: "mycli", Command: "cmd2"},
+			},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for duplicate alias name")
+	}
+	if !strings.Contains(err.Error(), "duplicate alias name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateAliasesInvalidName(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{},
+	}
+	layers := map[string]*Layer{
+		"svc": {
+			Name:       "svc",
+			HasUserYml: true,
+			HasAliases: true,
+			aliases:    []AliasYAML{{Name: "-bad", Command: "cmd"}},
+		},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for invalid alias name")
+	}
+	if !strings.Contains(err.Error(), "must match") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateImageAliasesDuplicate(t *testing.T) {
+	cfg := &Config{
+		Images: map[string]ImageConfig{
+			"test": {
+				Layers: []string{"svc"},
+				Aliases: []AliasConfig{
+					{Name: "mycli", Command: "cmd1"},
+					{Name: "mycli", Command: "cmd2"},
+				},
+			},
+		},
+	}
+	layers := map[string]*Layer{
+		"svc": {Name: "svc", HasUserYml: true},
+	}
+
+	err := Validate(cfg, layers)
+	if err == nil {
+		t.Error("expected error for duplicate image alias name")
+	}
+	if !strings.Contains(err.Error(), "duplicate alias name") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestIsValidPort(t *testing.T) {
 	tests := []struct {
 		input string

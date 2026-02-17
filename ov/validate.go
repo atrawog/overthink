@@ -66,6 +66,9 @@ func Validate(cfg *Config, layers map[string]*Layer) error {
 	// Validate merge config
 	validateMergeConfig(cfg, errs)
 
+	// Validate aliases
+	validateAliases(cfg, layers, errs)
+
 	// Validate no circular dependencies in layers
 	validateLayerDAG(cfg, layers, errs)
 
@@ -363,6 +366,53 @@ func validateVolumes(layers map[string]*Layer, errs *ValidationError) {
 			}
 			if vol.Path == "" {
 				errs.Add("layer %q layer.yml volumes: missing required \"path\" field", name)
+			}
+		}
+	}
+}
+
+// validateAliases validates alias declarations in layers and images
+func validateAliases(cfg *Config, layers map[string]*Layer, errs *ValidationError) {
+	// Validate layer aliases
+	for name, layer := range layers {
+		if !layer.HasAliases {
+			continue
+		}
+		seen := make(map[string]bool)
+		for _, a := range layer.Aliases() {
+			if a.Name == "" {
+				errs.Add("layer %q layer.yml aliases: missing required \"name\" field", name)
+			} else if !aliasNameRe.MatchString(a.Name) {
+				errs.Add("layer %q layer.yml aliases: name %q must match [a-zA-Z0-9][a-zA-Z0-9._-]*", name, a.Name)
+			} else if seen[a.Name] {
+				errs.Add("layer %q layer.yml aliases: duplicate alias name %q", name, a.Name)
+			} else {
+				seen[a.Name] = true
+			}
+			if a.Command == "" {
+				errs.Add("layer %q layer.yml aliases: missing required \"command\" field for alias %q", name, a.Name)
+			}
+		}
+	}
+
+	// Validate image-level aliases
+	for imageName, img := range cfg.Images {
+		if !img.IsEnabled() {
+			continue
+		}
+		if len(img.Aliases) == 0 {
+			continue
+		}
+		seen := make(map[string]bool)
+		for _, a := range img.Aliases {
+			if a.Name == "" {
+				errs.Add("image %q aliases: missing required \"name\" field", imageName)
+			} else if !aliasNameRe.MatchString(a.Name) {
+				errs.Add("image %q aliases: name %q must match [a-zA-Z0-9][a-zA-Z0-9._-]*", imageName, a.Name)
+			} else if seen[a.Name] {
+				errs.Add("image %q aliases: duplicate alias name %q", imageName, a.Name)
+			} else {
+				seen[a.Name] = true
 			}
 		}
 	}

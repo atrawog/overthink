@@ -9,3 +9,7 @@ route:
 volumes:
   - name: data
     path: "~/.webservice"
+
+aliases:
+  - name: websvc
+    command: websvc-server

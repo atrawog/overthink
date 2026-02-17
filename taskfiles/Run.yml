@@ -51,6 +51,16 @@ tasks:
     cmds:
       - "{{.ROOT_DIR}}/bin/ov remove {{.CLI_ARGS}}"
 
+  alias-install:
+    desc: "Install aliases for an image. Usage: task run:alias-install -- <image>"
+    cmds:
+      - "{{.ROOT_DIR}}/bin/ov alias install {{.CLI_ARGS}}"
+
+  alias-uninstall:
+    desc: "Remove aliases for an image. Usage: task run:alias-uninstall -- <image>"
+    cmds:
+      - "{{.ROOT_DIR}}/bin/ov alias uninstall {{.CLI_ARGS}}"
+
   vm:
     desc: "Run a QCOW2 image in QEMU. Usage: task run:vm -- <image> [tag]"
     preconditions:

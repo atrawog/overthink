@@ -26,6 +26,7 @@ type CLI struct {
 	Logs     LogsCmd     `cmd:"" help:"Show service container logs"`
 	Update   UpdateCmd   `cmd:"" help:"Update image and restart if active"`
 	Remove   RemoveCmd   `cmd:"" help:"Remove service container"`
+	Alias    AliasCmd    `cmd:"" help:"Manage command aliases for container images"`
 	Config   ConfigCmd   `cmd:"" help:"Manage runtime configuration"`
 	Version  VersionCmd  `cmd:"" help:"Print computed CalVer tag"`
 }
@@ -129,6 +130,18 @@ func (c *InspectCmd) Run() error {
 			for _, vol := range volumes {
 				fmt.Printf("%s\t%s\n", vol.VolumeName, vol.ContainerPath)
 			}
+		case "aliases":
+			layers, err := ScanLayers(dir)
+			if err != nil {
+				return err
+			}
+			aliases, err := CollectImageAliases(cfg, layers, c.Image)
+			if err != nil {
+				return err
+			}
+			for _, a := range aliases {
+				fmt.Printf("%s\t%s\n", a.Name, a.Command)
+			}
 		default:
 			return fmt.Errorf("unknown format field: %s", c.Format)
 		}
@@ -152,6 +165,7 @@ type ListCmd struct {
 	Services ListServicesCmd `cmd:"" help:"Layers with service in layer.yml"`
 	Routes   ListRoutesCmd   `cmd:"" help:"Layers with route in layer.yml"`
 	Volumes  ListVolumesCmd  `cmd:"" help:"Layers with volumes in layer.yml"`
+	Aliases  ListAliasesCmd  `cmd:"" help:"Layers with aliases in layer.yml"`
 }
 
 // ListImagesCmd lists images from images.yml

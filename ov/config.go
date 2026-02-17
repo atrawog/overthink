@@ -20,21 +20,28 @@ type MergeConfig struct {
 	MaxMB int  `yaml:"max_mb,omitempty"` // maximum size of a merged layer (default: 1024)
 }
 
+// AliasConfig represents a command alias in images.yml
+type AliasConfig struct {
+	Name    string `yaml:"name"`
+	Command string `yaml:"command,omitempty"` // defaults to Name if empty
+}
+
 // ImageConfig represents configuration for a single image or defaults
 type ImageConfig struct {
-	Enabled   *bool        `yaml:"enabled,omitempty"`
-	Base      string       `yaml:"base,omitempty"`
-	Bootc     bool         `yaml:"bootc,omitempty"`
-	Platforms []string     `yaml:"platforms,omitempty"`
-	Tag       string       `yaml:"tag,omitempty"`
-	Registry  string       `yaml:"registry,omitempty"`
-	Pkg       string       `yaml:"pkg,omitempty"`
-	Layers    []string     `yaml:"layers,omitempty"`
-	Ports     []string     `yaml:"ports,omitempty"` // runtime port mappings ["host:container"]
-	User      string       `yaml:"user,omitempty"`  // username (default: "user")
-	UID       *int         `yaml:"uid,omitempty"`   // user ID (default: 1000)
-	GID       *int         `yaml:"gid,omitempty"`   // group ID (default: 1000)
-	Merge     *MergeConfig `yaml:"merge,omitempty"` // layer merge settings
+	Enabled   *bool         `yaml:"enabled,omitempty"`
+	Base      string        `yaml:"base,omitempty"`
+	Bootc     bool          `yaml:"bootc,omitempty"`
+	Platforms []string      `yaml:"platforms,omitempty"`
+	Tag       string        `yaml:"tag,omitempty"`
+	Registry  string        `yaml:"registry,omitempty"`
+	Pkg       string        `yaml:"pkg,omitempty"`
+	Layers    []string      `yaml:"layers,omitempty"`
+	Ports     []string      `yaml:"ports,omitempty"`    // runtime port mappings ["host:container"]
+	User      string        `yaml:"user,omitempty"`     // username (default: "user")
+	UID       *int          `yaml:"uid,omitempty"`      // user ID (default: 1000)
+	GID       *int          `yaml:"gid,omitempty"`      // group ID (default: 1000)
+	Merge     *MergeConfig  `yaml:"merge,omitempty"`    // layer merge settings
+	Aliases   []AliasConfig `yaml:"aliases,omitempty"`  // command aliases
 }
 
 // IsEnabled returns true if the image is enabled (nil defaults to true)

@@ -52,6 +52,7 @@ Optional YAML file consolidating all layer metadata. Parsed by `ov/layers.go:par
 | `rpm` | `RpmConfig` | RPM package config. See [System Packages](#system-packages-rpmdeb). |
 | `deb` | `DebConfig` | Debian package config. See [System Packages](#system-packages-rpmdeb). |
 | `volumes` | `[]VolumeYAML` | Persistent named volumes. Each entry has `name` + `path` fields. `~`/`$HOME` expanded. See [Volume Management](#volume-management). |
+| `aliases` | `[]AliasYAML` | Host command aliases. Each entry has `name` + `command` fields. See [Command Aliases](#command-aliases). |
 
 **`rpm` section fields:**
 
@@ -151,6 +152,7 @@ Every setting resolves through: **image -> defaults -> hardcoded fallback** (fir
 | `uid` | `1000` | User ID |
 | `gid` | `1000` | Group ID |
 | `merge` | `null` | Layer merge settings (`auto: true, max_mb: 128`). See [Layer Merging](#layer-merging). |
+| `aliases` | `[]` | Command aliases (`name` + optional `command`). See [Command Aliases](#command-aliases). |
 
 When `base` references another image in `images.yml`, the generator resolves it to the full registry/tag and creates a build dependency. The referenced image must be built first.
 
@@ -296,6 +298,62 @@ Source: `ov/volumes.go` (collection, expansion), `ov/layers.go` (`VolumeYAML` st
 
 ---
 
+## Command Aliases
+
+Distrobox-style wrapper scripts that let you run container commands transparently from the host. Type `openclaw` on the host and it runs inside the right container automatically.
+
+### Declaration
+
+Aliases can be declared in `layer.yml` and/or `images.yml`:
+
+```yaml
+# layers/openclaw/layer.yml
+aliases:
+  - name: openclaw
+    command: openclaw
+
+# images.yml (image-level, can override layer aliases)
+images:
+  openclaw:
+    aliases:
+      - name: openclaw        # command defaults to name if omitted
+```
+
+Layer aliases require both `name` and `command`. Image-level aliases default `command` to `name` if omitted. Image-level aliases override layer aliases with the same name.
+
+### Wrapper Scripts
+
+`ov alias add` or `ov alias install` writes shell scripts to `~/.local/bin/`:
+
+```sh
+#!/bin/sh
+# ov-alias
+# image: openclaw
+# command: openclaw
+_ov_q(){ printf "'"; printf '%s' "$1" | sed "s/'/'\\\\''/g"; printf "' "; }
+c="openclaw"; for a in "$@"; do c="$c $(_ov_q "$a")"; done
+exec ov shell openclaw -c "$c"
+```
+
+The `# ov-alias` marker enables safe list/delete scanning. `ov alias remove` verifies this marker before deleting (won't remove non-ov files).
+
+The `_ov_q()` helper properly single-quotes each argument (handles spaces, quotes, special chars). POSIX sh compatible. Aliases always start an ephemeral container via `ov shell`.
+
+### Collection
+
+`CollectImageAliases()` gathers aliases from the image's own layers (in dependency order) plus image-level config. **No base chain traversal** — aliases are leaf-image specific (unlike volumes). Layer aliases come first; image-level overrides by name.
+
+### Validation Rules
+
+- Alias name must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` (valid filename)
+- Layer aliases require both `name` and `command`
+- Image-level `command` is optional (defaults to `name`)
+- No duplicate alias names within a layer or within an image
+
+Source: `ov/alias.go` (wrapper gen, collection, CLI commands), `ov/layers.go` (`AliasYAML`, `HasAliases`, `Aliases()`), `ov/config.go` (`AliasConfig`).
+
+---
+
 ## GPU Passthrough
 
 `ov shell`, `ov start`, and `ov enable` support GPU passthrough via `--gpu` / `--no-gpu` flags.
@@ -366,6 +424,12 @@ ov list targets                        # Build targets in dependency order
 ov list services                       # Layers with service in layer.yml
 ov list routes                         # Layers with route in layer.yml (host + port)
 ov list volumes                        # Layers with volumes in layer.yml
+ov list aliases                        # Layers with aliases in layer.yml
+ov alias add <name> <image> [command]  # Create a host command alias
+ov alias remove <name>                 # Remove an alias
+ov alias list                          # List all installed aliases
+ov alias install <image>               # Install default aliases from layer.yml / images.yml
+ov alias uninstall <image>             # Remove all aliases for an image
 ov build [image...]                    # Build for local platform, load into engine store
 ov build --push [image...]             # Build for all platforms and push to registry
 ov build --platform linux/amd64 [image...]  # Specific platform
@@ -395,11 +459,11 @@ ov config path                         # Print config file path
 ov version                             # Print computed CalVer tag
 ```
 
-**Output conventions:** `generate`/`validate`/`new`/`merge` write to stderr. `inspect`/`list`/`version` write to stdout (pipeable). `inspect --format <field>` outputs bare value for shell substitution (`tag`, `base`, `pkg`, `registry`, `platforms`, `layers`, `ports`, `volumes`).
+**Output conventions:** `generate`/`validate`/`new`/`merge` write to stderr. `inspect`/`list`/`version` write to stdout (pipeable). `inspect --format <field>` outputs bare value for shell substitution (`tag`, `base`, `pkg`, `registry`, `platforms`, `layers`, `ports`, `volumes`, `aliases`).
 
 **Error handling:** validation collects all errors at once. Exit codes: 0 = success, 1 = validation/user error, 2 = internal error.
 
-**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `rpm.copr` requires `rpm.packages`, `rpm.repos` requires `rpm.packages`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `layer.yml` `env` must not set `PATH` directly (use `path_append`), `layer.yml` `ports` must be valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `layer.yml` `route` must have both `host` and `port` (valid number), images with route layers must include traefik, `merge.max_mb` must be > 0, volume names must match `^[a-z0-9]+(-[a-z0-9]+)*$`, volume entries require both `name` and `path`, duplicate volume names within a layer rejected.
+**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `rpm.copr` requires `rpm.packages`, `rpm.repos` requires `rpm.packages`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `layer.yml` `env` must not set `PATH` directly (use `path_append`), `layer.yml` `ports` must be valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `layer.yml` `route` must have both `host` and `port` (valid number), images with route layers must include traefik, `merge.max_mb` must be > 0, volume names must match `^[a-z0-9]+(-[a-z0-9]+)*$`, volume entries require both `name` and `path`, duplicate volume names within a layer rejected, alias names must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$`, layer aliases require both `name` and `command`, duplicate alias names within a layer or image rejected.
 
 ---
 
@@ -431,6 +495,7 @@ project/
 |   +-- gpu.go                          # GPU auto-detection + passthrough flags
 |   +-- transfer.go                     # Cross-engine image transfer (LocalImageExists, TransferImage, EnsureImage)
 |   +-- volumes.go                      # Named volume collection + mounting
+|   +-- alias.go                        # Command aliases (wrapper scripts, collection, CLI commands)
 |   +-- *_test.go                       # Tests for each file
 +-- .build/                             # Generated (gitignored)
 |   +-- <image>/Containerfile
@@ -439,7 +504,7 @@ project/
 +-- Taskfile.yml                        # Root: includes + PATH setup
 +-- taskfiles/
 |   +-- Build.yml                       # ov, all, local, push, merge, iso, qcow2, raw
-|   +-- Run.yml                         # container, shell, enable, disable, start, stop, status, logs, update, remove, vm
+|   +-- Run.yml                         # container, shell, enable, disable, start, stop, status, logs, update, remove, alias-install, alias-uninstall, vm
 |   +-- Setup.yml                       # builder, all
 +-- layers/<name>/                      # Layer directories (see Layer Definition)
 +-- templates/
@@ -462,7 +527,7 @@ project/
 | `supervisord` | `layer.yml` (depends: python), `pixi.toml` | supervisor package via pixi. |
 | `traefik` | `layer.yml` (depends, ports, service), `root.yml`, `traefik.yml` | Traefik reverse proxy. Web on :8000, dashboard on :8080. Serves routes from `route` configs. |
 | `testapi` | `layer.yml` (depends, ports, route, service), `pixi.toml`, `app.py`, `user.yml` | Minimal FastAPI test service on port 9090. Routed via `testapi.localhost`. |
-| `openclaw` | `layer.yml` (depends, env, ports, volumes, service), `package.json` | OpenClaw gateway on port 18789. Persistent `data` volume at `~/.openclaw`. |
+| `openclaw` | `layer.yml` (depends, env, ports, volumes, aliases, service), `package.json` | OpenClaw gateway on port 18789. Persistent `data` volume at `~/.openclaw`. Alias: `openclaw`. |
 
 ---
 
@@ -486,6 +551,8 @@ project/
 | `task run:logs -- <image>` | Show service logs (`ov logs`) |
 | `task run:update -- <image>` | Update image and restart (`ov update`) |
 | `task run:remove -- <image>` | Remove a service (`ov remove`) |
+| `task run:alias-install -- <image>` | Install aliases for an image (`ov alias install`) |
+| `task run:alias-uninstall -- <image>` | Remove aliases for an image (`ov alias uninstall`) |
 | `task build:iso -- <image> [tag]` | Build ISO via Bootc Image Builder (bootc only) |
 | `task build:qcow2 -- <image> [tag]` | Build QCOW2 VM image (bootc only) |
 | `task build:raw -- <image> [tag]` | Build RAW disk image (bootc only) |

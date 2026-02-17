@@ -13,6 +13,10 @@ volumes:
   - name: models
     path: "~/.ollama/models"
 
+aliases:
+  - name: ollama
+    command: ollama
+
 service: |
   [program:ollama]
   command=ollama serve

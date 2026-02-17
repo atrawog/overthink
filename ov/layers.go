@@ -16,6 +16,12 @@ type VolumeYAML struct {
 	Path string `yaml:"path"`
 }
 
+// AliasYAML represents a command alias declaration in layer.yml
+type AliasYAML struct {
+	Name    string `yaml:"name"`
+	Command string `yaml:"command"`
+}
+
 // LayerYAML represents the parsed layer.yml file
 type LayerYAML struct {
 	Depends    []string          `yaml:"depends,omitempty"`
@@ -27,6 +33,7 @@ type LayerYAML struct {
 	Rpm        *RpmConfig        `yaml:"rpm,omitempty"`
 	Deb        *DebConfig        `yaml:"deb,omitempty"`
 	Volumes    []VolumeYAML      `yaml:"volumes,omitempty"`
+	Aliases    []AliasYAML       `yaml:"aliases,omitempty"`
 }
 
 // RouteYAML represents a route declaration in layer.yml
@@ -73,6 +80,7 @@ type Layer struct {
 	HasPorts          bool
 	HasRoute          bool
 	HasVolumes        bool
+	HasAliases        bool
 	HasPixiLock       bool
 	Depends           []string
 
@@ -84,6 +92,7 @@ type Layer struct {
 	route       *RouteConfig
 	serviceConf string
 	volumes     []VolumeYAML
+	aliases     []AliasYAML
 }
 
 // ScanLayers scans the layers/ directory and returns all layers
@@ -195,6 +204,10 @@ func scanLayer(path string, name string) (*Layer, error) {
 		// Pre-populate volumes
 		layer.HasVolumes = len(ly.Volumes) > 0
 		layer.volumes = ly.Volumes
+
+		// Pre-populate aliases
+		layer.HasAliases = len(ly.Aliases) > 0
+		layer.aliases = ly.Aliases
 	}
 
 	return layer, nil
@@ -314,6 +327,22 @@ func VolumeLayers(layers map[string]*Layer) []*Layer {
 		}
 	}
 	return vols
+}
+
+// Aliases returns the alias declarations (pre-populated from layer.yml)
+func (l *Layer) Aliases() []AliasYAML {
+	return l.aliases
+}
+
+// AliasLayers returns layers that have alias declarations
+func AliasLayers(layers map[string]*Layer) []*Layer {
+	var result []*Layer
+	for _, layer := range layers {
+		if layer.HasAliases {
+			result = append(result, layer)
+		}
+	}
+	return result
 }
 
 // NeedsGit returns true if the pixi manifest contains git-based dependencies
