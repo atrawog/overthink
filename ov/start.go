@@ -74,6 +74,11 @@ func (c *StartCmd) runDirect(rt *ResolvedRuntime) error {
 
 	engine := rt.RunEngine
 	imageRef := resolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
+
+	if err := EnsureImage(imageRef, rt); err != nil {
+		return err
+	}
+
 	name := containerName(c.Image)
 	args := buildStartArgs(engine, imageRef, absWorkspace, resolved.Ports, name, volumes, gpu)
 

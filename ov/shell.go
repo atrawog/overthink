@@ -69,6 +69,11 @@ func (c *ShellCmd) Run() error {
 	engine := rt.RunEngine
 
 	imageRef := resolveShellImageRef(resolved.Registry, resolved.Name, c.Tag)
+
+	if err := EnsureImage(imageRef, rt); err != nil {
+		return err
+	}
+
 	args := buildShellArgs(engine, imageRef, absWorkspace, resolved.UID, resolved.GID, resolved.Ports, volumes, gpu, c.Command)
 
 	// Find engine binary

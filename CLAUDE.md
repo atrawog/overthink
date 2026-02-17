@@ -314,6 +314,32 @@ Source: `ov/gpu.go` (detection), `ov/engine.go` (engine-specific args). `GPUFlag
 
 ---
 
+## Cross-Engine Image Transfer
+
+When `engine.build` and `engine.run` differ (e.g., build with Docker, run with Podman), images built by one engine aren't available in the other's store. `ov` automatically transfers images between engines on demand.
+
+### Functions (`ov/transfer.go`)
+
+| Function | Purpose |
+|---|---|
+| `LocalImageExists(engine, imageRef)` | Check if image exists in an engine's local store. Docker: `docker image inspect`. Podman: `podman image exists`. Package-level var for testability. |
+| `TransferImage(srcEngine, dstEngine, imageRef)` | Bidirectional pipe: `<src> save <ref> \| <dst> load`. Logs to stderr. |
+| `EnsureImage(imageRef, rt)` | 1. Image in run engine? Return (no-op). 2. Same engine, missing? Error with "build it first". 3. Missing from both? Error naming both engines. 4. Otherwise: transfer from build engine to run engine. |
+
+### Transfer Points
+
+| Command | Transfer point | Target engine |
+|---|---|---|
+| `ov shell` | `shell.go:Run()` | `rt.RunEngine` |
+| `ov start` (direct) | `start.go:runDirect()` | `rt.RunEngine` |
+| `ov start` (quadlet) | delegates to pod install | podman (always) |
+| `ov pod install` | `pod.go:PodInstallCmd.Run()` | podman (always) |
+| `ov pod update` | `pod.go:PodUpdateCmd.Run()` | podman (always) |
+| `ov build` | none | N/A |
+| `ov merge` | none | N/A |
+
+---
+
 ## Versioning
 
 CalVer in semver format: `YYYY.DDD.HHMM` (year, day-of-year, UTC time). Computed once per `ov generate` invocation. Source: `ov/version.go`.
@@ -402,6 +428,7 @@ project/
 |   +-- start.go                        # `start`/`stop` commands (engine run -d)
 |   +-- pod.go                          # `pod` command (podman quadlet systemd services)
 |   +-- gpu.go                          # GPU auto-detection + passthrough flags
+|   +-- transfer.go                     # Cross-engine image transfer (LocalImageExists, TransferImage, EnsureImage)
 |   +-- volumes.go                      # Named volume collection + mounting
 |   +-- *_test.go                       # Tests for each file
 +-- .build/                             # Generated (gitignored)

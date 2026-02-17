@@ -73,7 +73,8 @@ func (c *PodInstallCmd) Run() error {
 		return err
 	}
 
-	if err := ensurePodmanImage(imageRef, rt.BuildEngine); err != nil {
+	podmanRT := &ResolvedRuntime{BuildEngine: rt.BuildEngine, RunEngine: "podman"}
+	if err := EnsureImage(imageRef, podmanRT); err != nil {
 		return err
 	}
 
@@ -312,16 +313,9 @@ func (c *PodUpdateCmd) Run() error {
 		return err
 	}
 
-	if rt.BuildEngine == "podman" {
-		// Already in podman store, just verify it exists
-		check := exec.Command("podman", "image", "exists", imageRef)
-		if err := check.Run(); err != nil {
-			return fmt.Errorf("image %s not found in podman", imageRef)
-		}
-	} else {
-		if err := transferDockerToPodman(imageRef); err != nil {
-			return err
-		}
+	podmanRT := &ResolvedRuntime{BuildEngine: rt.BuildEngine, RunEngine: "podman"}
+	if err := EnsureImage(imageRef, podmanRT); err != nil {
+		return err
 	}
 
 	svc := serviceName(c.Image)
@@ -342,52 +336,3 @@ func (c *PodUpdateCmd) Run() error {
 	return nil
 }
 
-// ensurePodmanImage checks if an image exists in podman, and if not, transfers it.
-// When buildEngine is "podman", the image is already in the podman store.
-func ensurePodmanImage(imageRef string, buildEngine string) error {
-	check := exec.Command("podman", "image", "exists", imageRef)
-	if err := check.Run(); err == nil {
-		fmt.Fprintf(os.Stderr, "Image %s already in podman\n", imageRef)
-		return nil
-	}
-
-	if buildEngine == "podman" {
-		return fmt.Errorf("image %s not found in podman (build engine is podman, no docker to transfer from)", imageRef)
-	}
-
-	return transferDockerToPodman(imageRef)
-}
-
-// transferDockerToPodman transfers an image from Docker to Podman via docker save | podman load.
-func transferDockerToPodman(imageRef string) error {
-	// Verify image exists in Docker
-	inspect := exec.Command("docker", "image", "inspect", imageRef)
-	if output, err := inspect.CombinedOutput(); err != nil {
-		return fmt.Errorf("image %s not found in docker:\n%s", imageRef, strings.TrimSpace(string(output)))
-	}
-
-	fmt.Fprintf(os.Stderr, "Transferring %s from docker to podman\n", imageRef)
-
-	save := exec.Command("docker", "save", imageRef)
-	load := exec.Command("podman", "load")
-
-	pipe, err := save.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("creating pipe: %w", err)
-	}
-	load.Stdin = pipe
-	load.Stderr = os.Stderr
-
-	if err := load.Start(); err != nil {
-		return fmt.Errorf("starting podman load: %w", err)
-	}
-	if err := save.Run(); err != nil {
-		return fmt.Errorf("docker save failed: %w", err)
-	}
-	if err := load.Wait(); err != nil {
-		return fmt.Errorf("podman load failed: %w", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "Transferred %s to podman\n", imageRef)
-	return nil
-}
