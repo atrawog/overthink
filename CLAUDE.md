@@ -1,6 +1,7 @@
 # Overthink Build System
 
-Composable container images from a library of layers. Built on `docker buildx bake` (HCL), `supervisord`, and `task` ([taskfile.dev](https://taskfile.dev)).
+Compose container images from a library of fully configurable layers.
+Built on `docker buildx bake` (HCL), `supervisord`, and `task` ([taskfile.dev](https://taskfile.dev)).
 
 ---
 
@@ -51,6 +52,7 @@ Optional YAML file consolidating all layer metadata. Parsed by `ov/layers.go:par
 | `service` | multiline string (`\|`) | Supervisord service fragment (`[program:<name>]`). Triggers supervisord assembly in images. |
 | `rpm` | `RpmConfig` | RPM package config. See [System Packages](#system-packages-rpmdeb). |
 | `deb` | `DebConfig` | Debian package config. See [System Packages](#system-packages-rpmdeb). |
+| `volumes` | `[]VolumeYAML` | Persistent named volumes. Each entry has `name` + `path` fields. `~`/`$HOME` expanded. See [Volume Management](#volume-management). |
 
 **`rpm` section fields:**
 
@@ -122,6 +124,13 @@ images:
     ports:
       - "8000:8000"
       - "8080:8080"
+
+  openclaw:
+    base: fedora
+    layers:
+      - openclaw
+    ports:
+      - "18789:18789"
 ```
 
 ### Inheritance Chain
@@ -156,22 +165,24 @@ The actual order emitted by `ov/generate.go:generateContainerfile()`:
 2. **`ARG BASE_IMAGE=<resolved base>`**
 3. **Scratch stages** -- `FROM scratch AS <layer>` + `COPY layers/<layer>/ /` (one per layer)
 4. **Pixi build stages** -- `FROM ghcr.io/prefix-dev/pixi:latest AS <layer>-pixi-build` (one per pixi layer). Install command varies by manifest type:
-   - `pixi.toml`: `pixi install`
+   - `pixi.toml`: `pixi install` (or `pixi install --frozen` if `pixi.lock` exists)
    - `pyproject.toml`: `pixi install --manifest-path pyproject.toml`
    - `environment.yml`: `pixi project import environment.yml && pixi install`
-5. **Traefik routes stage** -- `FROM scratch AS traefik-routes` + `COPY .build/<image>/traefik-routes.yml` (only if image has layers with `route` files). Generated YAML maps hostnames to backend ports.
-6. **Supervisord config stage** -- `FROM scratch AS supervisord-conf` (only if image has service layers). Gathers header + service fragments from `.build/<image>/fragments/` (written at generate time from `layer.yml` `service` fields).
-7. **`FROM ${BASE_IMAGE}`**
-8. **Bootstrap** (external base only) -- install `task`, create user/group if not exists at configured UID/GID, set `WORKDIR`. For internal base: just `USER root`.
-9. **Layer ENV** -- consolidated `ENV` directives from all layers' `layer.yml` `env` and `path_append` fields
-10. **EXPOSE** -- deduplicated, sorted port numbers from all layers' `layer.yml` `ports` fields
-11. **COPY pixi environments** -- `COPY --from=<layer>-pixi-build --chown=<UID>:<GID>` for each pixi layer
-12. **COPY pixi binary** -- from first pixi build stage
-13. **Per-layer steps** -- for each layer in order: rpm/deb install (from `layer.yml`), root.yml, package.json, Cargo.toml, user.yml (only steps for files that exist)
-14. **Supervisord assembly** -- `cat /fragments/*.conf > /etc/supervisord.conf` (if services)
-15. **Traefik routes COPY** -- `COPY --from=traefik-routes /routes.yml /etc/traefik/dynamic/routes.yml` (if routes)
-16. **`USER <UID>`** -- final directive (uses numeric UID, not username)
-17. **`RUN bootc container lint`** -- (bootc images only)
+5. **npm build stages** -- `FROM node:lts-slim AS <layer>-npm-build` (one per npm layer). Parses `package.json` dependencies, installs globally to `/npm-global`.
+6. **Traefik routes stage** -- `FROM scratch AS traefik-routes` + `COPY .build/<image>/traefik-routes.yml` (only if image has layers with `route` files). Generated YAML maps hostnames to backend ports.
+7. **Supervisord config stage** -- `FROM scratch AS supervisord-conf` (only if image has service layers). Gathers header + service fragments from `.build/<image>/fragments/` (written at generate time from `layer.yml` `service` fields).
+8. **`FROM ${BASE_IMAGE}`**
+9. **Bootstrap** (external base only) -- install `task`, create user/group if not exists at configured UID/GID, set `WORKDIR`. For internal base: just `USER root`.
+10. **Layer ENV** -- consolidated `ENV` directives from all layers' `layer.yml` `env` and `path_append` fields
+11. **EXPOSE** -- deduplicated, sorted port numbers from all layers' `layer.yml` `ports` fields
+12. **COPY pixi environments** -- `COPY --from=<layer>-pixi-build --chown=<UID>:<GID>` for each pixi layer
+13. **COPY pixi binary** -- from first pixi build stage
+14. **COPY npm packages** -- `COPY --from=<layer>-npm-build --chown=<UID>:<GID> /npm-global <home>/.npm-global` for each npm layer
+15. **Per-layer steps** -- for each layer in order: rpm/deb install (from `layer.yml`), root.yml, Cargo.toml, user.yml (only steps for files that exist)
+16. **Supervisord assembly** -- `cat /fragments/*.conf > /etc/supervisord.conf` (if services)
+17. **Traefik routes COPY** -- `COPY --from=traefik-routes /routes.yml /etc/traefik/dynamic/routes.yml` (if routes)
+18. **`USER <UID>`** -- final directive (uses numeric UID, not username)
+19. **`RUN bootc container lint`** -- (bootc images only)
 
 Within per-layer steps, `USER <UID>` is emitted before the first user-mode step, and `USER root` resets after the last user-mode step for the next layer.
 
@@ -245,7 +256,7 @@ Rules: never `pip install`, `conda install`, or `dnf install python3-*`. Pixi is
 
 ### npm
 
-`npm install -g /ctx` from bind-mounted layer context. Installs to `$NPM_CONFIG_PREFIX` (`<home>/.npm-global/`). Requires `nodejs` layer earlier in the image.
+Multi-stage build: dedicated `FROM node:lts-slim` build stage per npm layer. Packages from `package.json` `dependencies` are installed globally via `npm install -g` into `/npm-global`, then `COPY`'d into the final image at `<home>/.npm-global/`. Requires `nodejs` layer earlier in the image (for PATH/env setup).
 
 ### Cargo
 
@@ -259,10 +270,47 @@ Rules: never `pip install`, `conda install`, or `dnf install python3-*`. Pixi is
 |---|---|---|
 | `rpm.packages`, `root.yml` (rpm) | `/var/cache/libdnf5` | `sharing=locked` |
 | `deb.packages`, `root.yml` (deb) | `/var/cache/apt` + `/var/lib/apt` | `sharing=locked` |
-| `package.json`, `user.yml` | `<home>/.cache/npm` | `uid=<UID>,gid=<GID>` |
+| `user.yml` | `<home>/.cache/npm` | `uid=<UID>,gid=<GID>` |
 | `Cargo.toml` | `<home>/.cargo/registry` | `uid=<UID>,gid=<GID>` |
 
 UID/GID in cache mounts are dynamic (from resolved image config, not hardcoded 1000). Pixi builds happen in separate stages; pixi/rattler cache dirs are set via `layer.yml` `env` fields, not cache mounts.
+
+---
+
+## Volume Management
+
+Layers can declare persistent named volumes in `layer.yml`:
+
+```yaml
+volumes:
+  - name: data
+    path: "~/.openclaw"
+```
+
+- **Name**: lowercase alphanumeric with hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`). Must be unique within a layer.
+- **Path**: container mount path. `~` and `$HOME` expanded to resolved home directory.
+- **Naming convention**: Docker/podman volume names are `ov-<image>-<name>` (e.g. `ov-openclaw-data`).
+- **Collection**: `CollectImageVolumes()` traverses the full image base chain (image -> base -> base's base), collecting volumes from all layers. Deduplicated by name (first declaration wins -- outermost image takes priority).
+- **Integration**: volumes are automatically mounted by `ov shell`, `ov start`, and `ov pod install` via `-v <volume>:<path>` flags.
+
+Source: `ov/volumes.go` (collection, expansion), `ov/layers.go` (`VolumeYAML` struct, `HasVolumes`, `Volumes()`).
+
+---
+
+## GPU Passthrough
+
+`ov shell`, `ov start`, and `ov pod install` support GPU passthrough via `--gpu` / `--no-gpu` flags.
+
+| Mode | Behavior |
+|---|---|
+| `--gpu` | Force GPU passthrough |
+| `--no-gpu` | Disable GPU passthrough |
+| (neither) | Auto-detect via `nvidia-smi` |
+
+- **Docker** (`ov shell`, `ov start`): passes `--gpus all`
+- **Podman quadlet** (`ov pod install`): adds `AddDevice=nvidia.com/gpu=all` to the `.container` file
+
+Source: `ov/gpu.go`. `GPUFlags` struct is embedded in `ShellCmd`, `StartCmd`, and `PodInstallCmd`.
 
 ---
 
@@ -291,16 +339,20 @@ ov list layers                         # Layers from filesystem
 ov list targets                        # Bake targets from generated HCL
 ov list services                       # Layers with service in layer.yml
 ov list routes                         # Layers with route in layer.yml (host + port)
+ov list volumes                        # Layers with volumes in layer.yml
 ov merge <image> [--max-mb N] [--tag TAG] [--dry-run]
                                        # Merge small layers in a built image
 ov merge --all [--dry-run]             # Merge all images with merge.auto enabled
 ov new layer <name>                    # Scaffold a layer directory
-ov shell <image> [-w PATH] [--tag TAG] # Bash shell in a container (mounts cwd at /workspace)
-ov start <image> [-w PATH] [--tag TAG] # Start service container with supervisord (detached)
+ov shell <image> [-w PATH] [-c CMD] [--tag TAG] [--gpu|--no-gpu]
+                                       # Bash shell in a container (mounts cwd at /workspace)
+ov start <image> [-w PATH] [--tag TAG] [--gpu|--no-gpu]
+                                       # Start service container with supervisord (detached)
 ov stop <image>                        # Stop a running service container
-ov pod install <image> [-w PATH] [--tag TAG]   # Generate quadlet .container file, daemon-reload
-                                               # Auto-transfers image from Docker if missing in podman
-ov pod update <image> [--tag TAG]              # Re-transfer image from Docker + restart service
+ov pod install <image> [-w PATH] [--tag TAG] [--gpu|--no-gpu]
+                                       # Generate quadlet .container file, daemon-reload
+                                       # Auto-transfers image from Docker if missing in podman
+ov pod update <image> [--tag TAG]      # Re-transfer image from Docker + restart service
 ov pod uninstall <image>               # Remove quadlet file, daemon-reload
 ov pod start <image>                   # systemctl --user start
 ov pod stop <image>                    # systemctl --user stop
@@ -309,11 +361,11 @@ ov pod logs <image> [-f]               # journalctl --user -u
 ov version                             # Print computed CalVer tag
 ```
 
-**Output conventions:** `generate`/`validate`/`new`/`merge` write to stderr. `inspect`/`list`/`version` write to stdout (pipeable). `inspect --format <field>` outputs bare value for shell substitution (`tag`, `base`, `pkg`, `registry`, `platforms`, `layers`, `ports`).
+**Output conventions:** `generate`/`validate`/`new`/`merge` write to stderr. `inspect`/`list`/`version` write to stdout (pipeable). `inspect --format <field>` outputs bare value for shell substitution (`tag`, `base`, `pkg`, `registry`, `platforms`, `layers`, `ports`, `volumes`).
 
 **Error handling:** validation collects all errors at once. Exit codes: 0 = success, 1 = validation/user error, 2 = internal error.
 
-**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `rpm.copr` requires `rpm.packages`, `rpm.repos` requires `rpm.packages`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `layer.yml` `env` must not set `PATH` directly (use `path_append`), `layer.yml` `ports` must be valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `layer.yml` `route` must have both `host` and `port` (valid number), images with route layers must include traefik, `merge.max_mb` must be > 0.
+**Validation rules:** layers must have install files, `Cargo.toml` requires `src/`, `rpm.copr` requires `rpm.packages`, `rpm.repos` requires `rpm.packages`, `pkg` is `"rpm"` or `"deb"`, no circular deps in layers or images, `layer.yml` `env` must not set `PATH` directly (use `path_append`), `layer.yml` `ports` must be valid port numbers (1-65535), image `ports` must be `"port"` or `"host:container"` format, `layer.yml` `route` must have both `host` and `port` (valid number), images with route layers must include traefik, `merge.max_mb` must be > 0, volume names must match `^[a-z0-9]+(-[a-z0-9]+)*$`, volume entries require both `name` and `path`, duplicate volume names within a layer rejected.
 
 ---
 
@@ -336,7 +388,10 @@ project/
 |   +-- merge.go                        # `merge` command (post-build layer merging)
 |   +-- registry.go                     # Remote image inspection (go-containerregistry)
 |   +-- shell.go                        # `shell` command (execs docker run)
+|   +-- start.go                        # `start`/`stop` commands (docker run -d)
 |   +-- pod.go                          # `pod` command (podman quadlet systemd services)
+|   +-- gpu.go                          # GPU auto-detection + passthrough flags
+|   +-- volumes.go                      # Named volume collection + mounting
 |   +-- *_test.go                       # Tests for each file
 +-- .build/                             # Generated (gitignored)
 |   +-- docker-bake.hcl
@@ -369,6 +424,7 @@ project/
 | `supervisord` | `layer.yml` (depends: python), `pixi.toml` | supervisor package via pixi. |
 | `traefik` | `layer.yml` (depends, ports, service), `root.yml`, `traefik.yml` | Traefik reverse proxy. Web on :8000, dashboard on :8080. Serves routes from `route` configs. |
 | `testapi` | `layer.yml` (depends, ports, route, service), `pixi.toml`, `app.py`, `user.yml` | Minimal FastAPI test service on port 9090. Routed via `testapi.localhost`. |
+| `openclaw` | `layer.yml` (depends, env, ports, volumes, service), `package.json` | OpenClaw gateway on port 18789. Persistent `data` volume at `~/.openclaw`. |
 
 ---
 
