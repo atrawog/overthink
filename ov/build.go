@@ -40,7 +40,7 @@ func (c *BuildCmd) Run() error {
 	engine := EngineBinary(rt.BuildEngine)
 
 	// Determine build order
-	order, err := ResolveImageOrder(gen.Images, gen.Layers, gen.Config.Defaults.Builder)
+	order, err := ResolveImageOrder(gen.Images, gen.Layers)
 	if err != nil {
 		return err
 	}
@@ -59,10 +59,12 @@ func (c *BuildCmd) Run() error {
 		platform = hostPlatform()
 	}
 
-	// Build each image in order
+	// Build each image in order, piping Containerfile content via stdin
+	// to avoid race conditions with concurrent ov generate overwrites
 	for _, name := range order {
 		img := gen.Images[name]
-		if err := c.buildImage(engine, dir, name, img, gen.Config, platform, rt.BuildEngine); err != nil {
+		content := gen.Containerfiles[name]
+		if err := c.buildImage(engine, dir, name, img, gen.Config, platform, rt.BuildEngine, content); err != nil {
 			return fmt.Errorf("building %s: %w", name, err)
 		}
 	}
@@ -80,9 +82,9 @@ func (c *BuildCmd) Run() error {
 }
 
 // buildImage builds a single image with the configured engine.
-func (c *BuildCmd) buildImage(engine, dir, name string, img *ResolvedImage, cfg *Config, platform, engineName string) error {
-	containerfile := fmt.Sprintf(".build/%s/Containerfile", name)
-
+// containerfileContent is piped via stdin (-f -) to avoid race conditions
+// with concurrent ov generate overwrites on disk.
+func (c *BuildCmd) buildImage(engine, dir, name string, img *ResolvedImage, cfg *Config, platform, engineName, containerfileContent string) error {
 	// Compute tags
 	tags := []string{img.FullTag}
 	origCfg := cfg.Images[name]
@@ -97,15 +99,16 @@ func (c *BuildCmd) buildImage(engine, dir, name string, img *ResolvedImage, cfg 
 	var args []string
 
 	if c.Push {
-		args = c.buildPushArgs(engine, containerfile, tags, img.Platforms, engineName)
+		args = c.buildPushArgs(engine, tags, img.Platforms, engineName)
 	} else {
-		args = c.buildLocalArgs(engine, containerfile, tags, platform)
+		args = c.buildLocalArgs(engine, tags, platform)
 	}
 
 	fmt.Fprintf(os.Stderr, "\n--- Building %s ---\n", name)
 
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(containerfileContent)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -116,8 +119,9 @@ func (c *BuildCmd) buildImage(engine, dir, name string, img *ResolvedImage, cfg 
 }
 
 // buildLocalArgs constructs args for a local (single-platform, load into store) build.
-func (c *BuildCmd) buildLocalArgs(engine, containerfile string, tags []string, platform string) []string {
-	args := []string{engine, "build", "-f", containerfile}
+// Uses -f - to read the Containerfile from stdin.
+func (c *BuildCmd) buildLocalArgs(engine string, tags []string, platform string) []string {
+	args := []string{engine, "build", "-f", "-"}
 	for _, tag := range tags {
 		args = append(args, "-t", tag)
 	}
@@ -129,15 +133,15 @@ func (c *BuildCmd) buildLocalArgs(engine, containerfile string, tags []string, p
 }
 
 // buildPushArgs constructs args for a multi-platform push build.
-func (c *BuildCmd) buildPushArgs(engine, containerfile string, tags []string, platforms []string, engineName string) []string {
+func (c *BuildCmd) buildPushArgs(engine string, tags []string, platforms []string, engineName string) []string {
 	if engineName == "podman" {
-		return c.buildPodmanPushArgs(containerfile, tags, platforms)
+		return c.buildPodmanPushArgs(tags, platforms)
 	}
-	return c.buildDockerPushArgs(containerfile, tags, platforms)
+	return c.buildDockerPushArgs(tags, platforms)
 }
 
-func (c *BuildCmd) buildDockerPushArgs(containerfile string, tags []string, platforms []string) []string {
-	args := []string{"docker", "buildx", "build", "--push", "-f", containerfile}
+func (c *BuildCmd) buildDockerPushArgs(tags []string, platforms []string) []string {
+	args := []string{"docker", "buildx", "build", "--push", "-f", "-"}
 	for _, tag := range tags {
 		args = append(args, "-t", tag)
 	}
@@ -148,9 +152,9 @@ func (c *BuildCmd) buildDockerPushArgs(containerfile string, tags []string, plat
 	return args
 }
 
-func (c *BuildCmd) buildPodmanPushArgs(containerfile string, tags []string, platforms []string) []string {
+func (c *BuildCmd) buildPodmanPushArgs(tags []string, platforms []string) []string {
 	// Podman uses --manifest for multi-platform builds
-	args := []string{"podman", "build", "-f", containerfile}
+	args := []string{"podman", "build", "-f", "-"}
 	if len(tags) > 0 {
 		args = append(args, "--manifest", tags[0])
 	}
@@ -177,7 +181,7 @@ func filterImages(order []string, requested []string, images map[string]*Resolve
 		}
 	}
 
-	// Collect requested images and their transitive base dependencies
+	// Collect requested images and their transitive base + builder dependencies
 	needed := make(map[string]bool)
 	var addDeps func(name string)
 	addDeps = func(name string) {
@@ -188,6 +192,11 @@ func filterImages(order []string, requested []string, images map[string]*Resolve
 		img := images[name]
 		if !img.IsExternalBase {
 			addDeps(img.Base)
+		}
+		if img.Builder != "" && img.Builder != name {
+			if _, ok := images[img.Builder]; ok {
+				addDeps(img.Builder)
+			}
 		}
 	}
 	for _, name := range requested {

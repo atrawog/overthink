@@ -11,13 +11,13 @@ import (
 
 // Generator holds state for generating build artifacts
 type Generator struct {
-	Dir        string
-	Config     *Config
-	Layers     map[string]*Layer
-	Tag        string
-	Images     map[string]*ResolvedImage
-	BuildDir   string
-	BuilderRef string // full tag of builder image (e.g. "ghcr.io/atrawog/builder:2026.48.1808")
+	Dir            string
+	Config         *Config
+	Layers         map[string]*Layer
+	Tag            string
+	Images         map[string]*ResolvedImage
+	BuildDir       string
+	Containerfiles map[string]string // cached content per image (used by ov build to pipe via stdin)
 }
 
 // resolveUserContext detects existing user in base image or uses configured values
@@ -100,12 +100,13 @@ func NewGenerator(dir string, tag string) (*Generator, error) {
 	images = updated
 
 	return &Generator{
-		Dir:      dir,
-		Config:   cfg,
-		Layers:   layers,
-		Tag:      tag,
-		Images:   images,
-		BuildDir: filepath.Join(dir, ".build"),
+		Dir:            dir,
+		Config:         cfg,
+		Layers:         layers,
+		Tag:            tag,
+		Images:         images,
+		BuildDir:       filepath.Join(dir, ".build"),
+		Containerfiles: make(map[string]string),
 	}, nil
 }
 
@@ -153,16 +154,8 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("creating .build directory: %w", err)
 	}
 
-	// Resolve builder reference
-	builderName := g.Config.Defaults.Builder
-	if builderName != "" {
-		if builderImg, ok := g.Images[builderName]; ok {
-			g.BuilderRef = builderImg.FullTag
-		}
-	}
-
 	// Resolve image build order
-	order, err := ResolveImageOrder(g.Images, g.Layers, builderName)
+	order, err := ResolveImageOrder(g.Images, g.Layers)
 	if err != nil {
 		return fmt.Errorf("resolving image order: %w", err)
 	}
@@ -224,10 +217,7 @@ func (g *Generator) generateContainerfile(imageName string) error {
 	}
 
 	// Resolve builder ref for this image (builder itself doesn't use builder stages)
-	builderRef := ""
-	if g.BuilderRef != "" && imageName != g.Config.Defaults.Builder {
-		builderRef = g.BuilderRef
-	}
+	builderRef := g.builderRefForImage(imageName)
 
 	// Emit per-layer pixi build stages
 	for _, layerName := range layerOrder {
@@ -426,8 +416,11 @@ func (g *Generator) generateContainerfile(imageName string) error {
 		return err
 	}
 
+	content := b.String()
+	g.Containerfiles[imageName] = content
+
 	containerfile := filepath.Join(imageDir, "Containerfile")
-	return os.WriteFile(containerfile, []byte(b.String()), 0644)
+	return os.WriteFile(containerfile, []byte(content), 0644)
 }
 
 // resolveBaseImage returns the full base image reference.
@@ -440,6 +433,19 @@ func (g *Generator) resolveBaseImage(img *ResolvedImage) string {
 	}
 	parentImg := g.Images[img.Base]
 	return parentImg.FullTag
+}
+
+// builderRefForImage returns the full tag of the builder image for a given image,
+// or "" if the image has no builder or is the builder itself.
+func (g *Generator) builderRefForImage(imageName string) string {
+	img := g.Images[imageName]
+	if img.Builder == "" || img.Builder == imageName {
+		return ""
+	}
+	if builderImg, ok := g.Images[img.Builder]; ok {
+		return builderImg.FullTag
+	}
+	return ""
 }
 
 // writeBootstrap writes the bootstrap preamble for external base images
