@@ -10,7 +10,7 @@ import (
 func TestGenerateQuadlet(t *testing.T) {
 	cfg := QuadletConfig{
 		ImageName: "fedora-test",
-		ImageRef:  "ghcr.io/atrawog/fedora-test:latest",
+		ImageRef:  "ghcr.io/overthinkos/fedora-test:latest",
 		Workspace: "/home/user/project",
 		Ports:     []string{"8000:8000", "8080:8080"},
 	}
@@ -23,7 +23,7 @@ Description=Overthink fedora-test
 After=network-online.target
 
 [Container]
-Image=ghcr.io/atrawog/fedora-test:latest
+Image=ghcr.io/overthinkos/fedora-test:latest
 ContainerName=ov-fedora-test
 Volume=/home/user/project:/workspace
 WorkingDir=/workspace
@@ -47,7 +47,7 @@ WantedBy=default.target
 func TestGenerateQuadletNoPorts(t *testing.T) {
 	cfg := QuadletConfig{
 		ImageName: "fedora",
-		ImageRef:  "ghcr.io/atrawog/fedora:latest",
+		ImageRef:  "ghcr.io/overthinkos/fedora:latest",
 		Workspace: "/tmp/workspace",
 		Ports:     nil,
 	}
@@ -87,7 +87,7 @@ func TestGenerateQuadletSinglePort(t *testing.T) {
 func TestGenerateQuadletWithVolumes(t *testing.T) {
 	cfg := QuadletConfig{
 		ImageName: "openclaw",
-		ImageRef:  "ghcr.io/atrawog/openclaw:latest",
+		ImageRef:  "ghcr.io/overthinkos/openclaw:latest",
 		Workspace: "/home/user/project",
 		Ports:     []string{"18789:18789"},
 		Volumes: []VolumeMount{
@@ -111,7 +111,7 @@ func TestGenerateQuadletWithVolumes(t *testing.T) {
 func TestGenerateQuadletWithGPU(t *testing.T) {
 	cfg := QuadletConfig{
 		ImageName: "ollama",
-		ImageRef:  "ghcr.io/atrawog/ollama:latest",
+		ImageRef:  "ghcr.io/overthinkos/ollama:latest",
 		Workspace: "/home/user/project",
 		GPU:       true,
 	}
@@ -126,7 +126,7 @@ func TestGenerateQuadletWithGPU(t *testing.T) {
 func TestGenerateQuadletWithoutGPU(t *testing.T) {
 	cfg := QuadletConfig{
 		ImageName: "fedora",
-		ImageRef:  "ghcr.io/atrawog/fedora:latest",
+		ImageRef:  "ghcr.io/overthinkos/fedora:latest",
 		Workspace: "/home/user/project",
 		GPU:       false,
 	}

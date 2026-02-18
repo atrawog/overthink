@@ -10,7 +10,7 @@ import (
 // QuadletConfig holds the parameters for generating a quadlet .container file
 type QuadletConfig struct {
 	ImageName string        // image name from images.yml (e.g. "fedora-test")
-	ImageRef  string        // full image reference (e.g. "ghcr.io/atrawog/fedora-test:latest")
+	ImageRef  string        // full image reference (e.g. "ghcr.io/overthinkos/fedora-test:latest")
 	Workspace string        // absolute host path to mount at /workspace
 	Ports     []string      // port mappings from images.yml (e.g. ["8000:8000", "8080:8080"])
 	Volumes   []VolumeMount // named volumes from layer.yml declarations

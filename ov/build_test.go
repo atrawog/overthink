@@ -8,12 +8,12 @@ import (
 func TestBuildLocalArgs(t *testing.T) {
 	cmd := &BuildCmd{}
 	args := cmd.buildLocalArgs("docker",
-		[]string{"ghcr.io/atrawog/fedora:2026.46.1415", "ghcr.io/atrawog/fedora:latest"},
+		[]string{"ghcr.io/overthinkos/fedora:2026.46.1415", "ghcr.io/overthinkos/fedora:latest"},
 		"linux/amd64")
 	want := []string{
 		"docker", "build", "-f", "-",
-		"-t", "ghcr.io/atrawog/fedora:2026.46.1415",
-		"-t", "ghcr.io/atrawog/fedora:latest",
+		"-t", "ghcr.io/overthinkos/fedora:2026.46.1415",
+		"-t", "ghcr.io/overthinkos/fedora:latest",
 		"--platform", "linux/amd64",
 		".",
 	}
@@ -25,11 +25,11 @@ func TestBuildLocalArgs(t *testing.T) {
 func TestBuildLocalArgsPodman(t *testing.T) {
 	cmd := &BuildCmd{}
 	args := cmd.buildLocalArgs("podman",
-		[]string{"ghcr.io/atrawog/fedora:2026.46.1415"},
+		[]string{"ghcr.io/overthinkos/fedora:2026.46.1415"},
 		"linux/arm64")
 	want := []string{
 		"podman", "build", "-f", "-",
-		"-t", "ghcr.io/atrawog/fedora:2026.46.1415",
+		"-t", "ghcr.io/overthinkos/fedora:2026.46.1415",
 		"--platform", "linux/arm64",
 		".",
 	}
@@ -41,12 +41,12 @@ func TestBuildLocalArgsPodman(t *testing.T) {
 func TestBuildDockerPushArgs(t *testing.T) {
 	cmd := &BuildCmd{}
 	args := cmd.buildDockerPushArgs(
-		[]string{"ghcr.io/atrawog/fedora:2026.46.1415", "ghcr.io/atrawog/fedora:latest"},
+		[]string{"ghcr.io/overthinkos/fedora:2026.46.1415", "ghcr.io/overthinkos/fedora:latest"},
 		[]string{"linux/amd64", "linux/arm64"})
 	want := []string{
 		"docker", "buildx", "build", "--push", "-f", "-",
-		"-t", "ghcr.io/atrawog/fedora:2026.46.1415",
-		"-t", "ghcr.io/atrawog/fedora:latest",
+		"-t", "ghcr.io/overthinkos/fedora:2026.46.1415",
+		"-t", "ghcr.io/overthinkos/fedora:latest",
 		"--platform", "linux/amd64,linux/arm64",
 		".",
 	}
@@ -58,11 +58,11 @@ func TestBuildDockerPushArgs(t *testing.T) {
 func TestBuildPodmanPushArgs(t *testing.T) {
 	cmd := &BuildCmd{}
 	args := cmd.buildPodmanPushArgs(
-		[]string{"ghcr.io/atrawog/fedora:2026.46.1415"},
+		[]string{"ghcr.io/overthinkos/fedora:2026.46.1415"},
 		[]string{"linux/amd64", "linux/arm64"})
 	want := []string{
 		"podman", "build", "-f", "-",
-		"--manifest", "ghcr.io/atrawog/fedora:2026.46.1415",
+		"--manifest", "ghcr.io/overthinkos/fedora:2026.46.1415",
 		"--platform", "linux/amd64,linux/arm64",
 		".",
 	}

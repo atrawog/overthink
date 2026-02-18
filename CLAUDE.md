@@ -86,7 +86,7 @@ An **image** is a named build target in `images.yml`. Example configuration:
 
 ```yaml
 defaults:
-  registry: ghcr.io/atrawog
+  registry: ghcr.io/overthinkos
   tag: auto
   base: "quay.io/fedora/fedora:43"
   platforms:
@@ -193,7 +193,7 @@ Built images embed runtime-relevant metadata as OCI `LABEL` directives (prefix: 
 |---|---|---|---|
 | `org.overthink.version` | string | `"1"` | Schema version for forward compat |
 | `org.overthink.image` | string | `"openclaw"` | Image name from images.yml |
-| `org.overthink.registry` | string | `"ghcr.io/atrawog"` | Registry prefix (omitted if empty) |
+| `org.overthink.registry` | string | `"ghcr.io/overthinkos"` | Registry prefix (omitted if empty) |
 | `org.overthink.uid` | string | `"1000"` | Numeric user ID |
 | `org.overthink.gid` | string | `"1000"` | Numeric group ID |
 | `org.overthink.user` | string | `"user"` | Username |
@@ -434,7 +434,7 @@ CalVer in semver format: `YYYY.DDD.HHMM` (year, day-of-year, UTC time). Computed
 
 | `tag` value | Generated tag(s) | Example |
 |---|---|---|
-| `"auto"` | `YYYY.DDD.HHMM` + `latest` | `ghcr.io/atrawog/fedora:2026.46.1415`, `...:latest` |
+| `"auto"` | `YYYY.DDD.HHMM` + `latest` | `ghcr.io/overthinkos/fedora:2026.46.1415`, `...:latest` |
 | `"nightly"` | `nightly` only | No `latest` alias |
 | `"1.2.3"` | `1.2.3` only | Pinned release |
 
@@ -747,7 +747,7 @@ ov build --platform linux/amd64 [image...]  # Specific platform
 5. For each image: `<engine> build -f .build/<image>/Containerfile -t <tags> --platform <platform> .`
 6. After all builds: `ov merge --all` (if merge.auto enabled, skipped for `--push`)
 
-**Internal base images** use exact CalVer tags in Containerfiles (`FROM ghcr.io/atrawog/fedora:2026.46.1415`). This ensures each image references the precise version of its parent. Both Docker and Podman resolve local images before pulling from registry.
+**Internal base images** use exact CalVer tags in Containerfiles (`FROM ghcr.io/overthinkos/fedora:2026.46.1415`). This ensures each image references the precise version of its parent. Both Docker and Podman resolve local images before pulling from registry.
 
 **Push mode** uses `docker buildx build --push` (Docker) or `podman build --manifest` + `podman manifest push` (Podman) for multi-platform builds.
 
@@ -789,7 +789,7 @@ The builder image itself has **no pixi build stages** (the pixi layer has no pix
 All pixi/npm build stages in derived images use `FROM <builder>:<tag>` instead of external images:
 
 ```dockerfile
-FROM ghcr.io/atrawog/builder:2026.48.1808 AS supervisord-pixi-build
+FROM ghcr.io/overthinkos/builder:2026.48.1808 AS supervisord-pixi-build
 WORKDIR /home/user
 COPY layers/supervisord/pixi.toml pixi.toml
 RUN pixi install

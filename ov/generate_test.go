@@ -13,17 +13,17 @@ func TestResolveBaseImage_InternalUseCalVer(t *testing.T) {
 				Name:           "fedora",
 				Base:           "quay.io/fedora/fedora:43",
 				IsExternalBase: true,
-				Registry:       "ghcr.io/atrawog",
+				Registry:       "ghcr.io/overthinkos",
 				Tag:            "2026.46.1415",
-				FullTag:        "ghcr.io/atrawog/fedora:2026.46.1415",
+				FullTag:        "ghcr.io/overthinkos/fedora:2026.46.1415",
 			},
 			"fedora-test": {
 				Name:           "fedora-test",
 				Base:           "fedora",
 				IsExternalBase: false,
-				Registry:       "ghcr.io/atrawog",
+				Registry:       "ghcr.io/overthinkos",
 				Tag:            "2026.46.1415",
-				FullTag:        "ghcr.io/atrawog/fedora-test:2026.46.1415",
+				FullTag:        "ghcr.io/overthinkos/fedora-test:2026.46.1415",
 			},
 		},
 	}
@@ -36,7 +36,7 @@ func TestResolveBaseImage_InternalUseCalVer(t *testing.T) {
 
 	// Internal base should return the parent's full CalVer tag
 	got = g.resolveBaseImage(g.Images["fedora-test"])
-	want := "ghcr.io/atrawog/fedora:2026.46.1415"
+	want := "ghcr.io/overthinkos/fedora:2026.46.1415"
 	if got != want {
 		t.Errorf("resolveBaseImage(fedora-test) = %q, want %q", got, want)
 	}

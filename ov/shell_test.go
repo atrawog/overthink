@@ -6,14 +6,14 @@ import (
 )
 
 func TestBuildShellArgs(t *testing.T) {
-	args := buildShellArgs("docker", "ghcr.io/atrawog/fedora:latest", "/home/user/project", 1000, 1000, nil, nil, false, "")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/fedora:latest", "/home/user/project", 1000, 1000, nil, nil, false, "")
 	want := []string{
 		"docker", "run", "--rm", "-it",
 		"-v", "/home/user/project:/workspace",
 		"-w", "/workspace",
 		"--user", "1000:1000",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/fedora:latest",
+		"ghcr.io/overthinkos/fedora:latest",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildShellArgs() =\n  %v\nwant\n  %v", args, want)
@@ -36,7 +36,7 @@ func TestBuildShellArgsCustomUIDGID(t *testing.T) {
 }
 
 func TestBuildShellArgsWithPorts(t *testing.T) {
-	args := buildShellArgs("docker", "ghcr.io/atrawog/fedora:latest", "/home/user/project", 1000, 1000, []string{"9090:9090", "8080:8080"}, nil, false, "")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/fedora:latest", "/home/user/project", 1000, 1000, []string{"9090:9090", "8080:8080"}, nil, false, "")
 	want := []string{
 		"docker", "run", "--rm", "-it",
 		"-v", "/home/user/project:/workspace",
@@ -45,7 +45,7 @@ func TestBuildShellArgsWithPorts(t *testing.T) {
 		"-p", "127.0.0.1:9090:9090",
 		"-p", "127.0.0.1:8080:8080",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/fedora:latest",
+		"ghcr.io/overthinkos/fedora:latest",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildShellArgs() =\n  %v\nwant\n  %v", args, want)
@@ -53,7 +53,7 @@ func TestBuildShellArgsWithPorts(t *testing.T) {
 }
 
 func TestBuildShellArgsWithSinglePort(t *testing.T) {
-	args := buildShellArgs("docker", "ghcr.io/atrawog/fedora:latest", "/home/user/project", 1000, 1000, []string{"8080"}, nil, false, "")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/fedora:latest", "/home/user/project", 1000, 1000, []string{"8080"}, nil, false, "")
 	want := []string{
 		"docker", "run", "--rm", "-it",
 		"-v", "/home/user/project:/workspace",
@@ -61,7 +61,7 @@ func TestBuildShellArgsWithSinglePort(t *testing.T) {
 		"--user", "1000:1000",
 		"-p", "127.0.0.1:8080:8080",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/fedora:latest",
+		"ghcr.io/overthinkos/fedora:latest",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildShellArgs() =\n  %v\nwant\n  %v", args, want)
@@ -72,7 +72,7 @@ func TestBuildShellArgsWithVolumes(t *testing.T) {
 	volumes := []VolumeMount{
 		{VolumeName: "ov-openclaw-data", ContainerPath: "/home/user/.openclaw"},
 	}
-	args := buildShellArgs("docker", "ghcr.io/atrawog/openclaw:latest", "/home/user/project", 1000, 1000, nil, volumes, false, "")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/openclaw:latest", "/home/user/project", 1000, 1000, nil, volumes, false, "")
 	want := []string{
 		"docker", "run", "--rm", "-it",
 		"-v", "/home/user/project:/workspace",
@@ -80,7 +80,7 @@ func TestBuildShellArgsWithVolumes(t *testing.T) {
 		"--user", "1000:1000",
 		"-v", "ov-openclaw-data:/home/user/.openclaw",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/openclaw:latest",
+		"ghcr.io/overthinkos/openclaw:latest",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildShellArgs() =\n  %v\nwant\n  %v", args, want)
@@ -88,7 +88,7 @@ func TestBuildShellArgsWithVolumes(t *testing.T) {
 }
 
 func TestBuildShellArgsWithGPU(t *testing.T) {
-	args := buildShellArgs("docker", "ghcr.io/atrawog/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, true, "")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, true, "")
 	want := []string{
 		"docker", "run", "--rm", "-it",
 		"-v", "/home/user/project:/workspace",
@@ -96,7 +96,7 @@ func TestBuildShellArgsWithGPU(t *testing.T) {
 		"--user", "1000:1000",
 		"--gpus", "all",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/ollama:latest",
+		"ghcr.io/overthinkos/ollama:latest",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildShellArgs(gpu=true) =\n  %v\nwant\n  %v", args, want)
@@ -104,7 +104,7 @@ func TestBuildShellArgsWithGPU(t *testing.T) {
 }
 
 func TestBuildShellArgsWithGPUPodman(t *testing.T) {
-	args := buildShellArgs("podman", "ghcr.io/atrawog/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, true, "")
+	args := buildShellArgs("podman", "ghcr.io/overthinkos/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, true, "")
 	want := []string{
 		"podman", "run", "--rm", "-it",
 		"-v", "/home/user/project:/workspace",
@@ -112,7 +112,7 @@ func TestBuildShellArgsWithGPUPodman(t *testing.T) {
 		"--user", "1000:1000",
 		"--device", "nvidia.com/gpu=all",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/ollama:latest",
+		"ghcr.io/overthinkos/ollama:latest",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildShellArgs(podman+gpu) =\n  %v\nwant\n  %v", args, want)
@@ -120,7 +120,7 @@ func TestBuildShellArgsWithGPUPodman(t *testing.T) {
 }
 
 func TestBuildShellArgsWithoutGPU(t *testing.T) {
-	args := buildShellArgs("docker", "ghcr.io/atrawog/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, false, "")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, false, "")
 	for _, arg := range args {
 		if arg == "--gpus" {
 			t.Error("buildShellArgs(gpu=false) should not contain --gpus")
@@ -149,14 +149,14 @@ func TestLocalizePort(t *testing.T) {
 }
 
 func TestBuildShellArgsWithCommand(t *testing.T) {
-	args := buildShellArgs("docker", "ghcr.io/atrawog/fedora:latest", "/home/user/project", 1000, 1000, nil, nil, false, "echo hello")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/fedora:latest", "/home/user/project", 1000, 1000, nil, nil, false, "echo hello")
 	want := []string{
 		"docker", "run", "--rm", "-i",
 		"-v", "/home/user/project:/workspace",
 		"-w", "/workspace",
 		"--user", "1000:1000",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/fedora:latest",
+		"ghcr.io/overthinkos/fedora:latest",
 		"-c", "echo hello",
 	}
 	if !reflect.DeepEqual(args, want) {
@@ -165,7 +165,7 @@ func TestBuildShellArgsWithCommand(t *testing.T) {
 }
 
 func TestBuildShellArgsWithCommandAndGPU(t *testing.T) {
-	args := buildShellArgs("docker", "ghcr.io/atrawog/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, true, "nvidia-smi")
+	args := buildShellArgs("docker", "ghcr.io/overthinkos/ollama:latest", "/home/user/project", 1000, 1000, nil, nil, true, "nvidia-smi")
 	want := []string{
 		"docker", "run", "--rm", "-i",
 		"-v", "/home/user/project:/workspace",
@@ -173,7 +173,7 @@ func TestBuildShellArgsWithCommandAndGPU(t *testing.T) {
 		"--user", "1000:1000",
 		"--gpus", "all",
 		"--entrypoint", "bash",
-		"ghcr.io/atrawog/ollama:latest",
+		"ghcr.io/overthinkos/ollama:latest",
 		"-c", "nvidia-smi",
 	}
 	if !reflect.DeepEqual(args, want) {
@@ -191,10 +191,10 @@ func TestResolveShellImageRef(t *testing.T) {
 	}{
 		{
 			name:     "with registry",
-			registry: "ghcr.io/atrawog",
+			registry: "ghcr.io/overthinkos",
 			image:    "fedora",
 			tag:      "latest",
-			want:     "ghcr.io/atrawog/fedora:latest",
+			want:     "ghcr.io/overthinkos/fedora:latest",
 		},
 		{
 			name:     "without registry",
@@ -205,10 +205,10 @@ func TestResolveShellImageRef(t *testing.T) {
 		},
 		{
 			name:     "custom tag",
-			registry: "ghcr.io/atrawog",
+			registry: "ghcr.io/overthinkos",
 			image:    "ubuntu",
 			tag:      "2026.46.1415",
-			want:     "ghcr.io/atrawog/ubuntu:2026.46.1415",
+			want:     "ghcr.io/overthinkos/ubuntu:2026.46.1415",
 		},
 	}
 

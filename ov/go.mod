@@ -1,4 +1,4 @@
-module github.com/atrawog/overthink/ov
+module github.com/overthinkos/overthink/ov
 
 go 1.25.6
 

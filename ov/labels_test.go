@@ -16,7 +16,7 @@ func TestExtractMetadataFromLabels(t *testing.T) {
 		return map[string]string{
 			LabelVersion:  "1",
 			LabelImage:    "openclaw",
-			LabelRegistry: "ghcr.io/atrawog",
+			LabelRegistry: "ghcr.io/overthinkos",
 			LabelUID:      "1000",
 			LabelGID:      "1000",
 			LabelUser:     "user",
@@ -27,7 +27,7 @@ func TestExtractMetadataFromLabels(t *testing.T) {
 		}, nil
 	}
 
-	meta, err := ExtractMetadata("docker", "ghcr.io/atrawog/openclaw:latest")
+	meta, err := ExtractMetadata("docker", "ghcr.io/overthinkos/openclaw:latest")
 	if err != nil {
 		t.Fatalf("ExtractMetadata() error = %v", err)
 	}
@@ -38,8 +38,8 @@ func TestExtractMetadataFromLabels(t *testing.T) {
 	if meta.Image != "openclaw" {
 		t.Errorf("Image = %q, want %q", meta.Image, "openclaw")
 	}
-	if meta.Registry != "ghcr.io/atrawog" {
-		t.Errorf("Registry = %q, want %q", meta.Registry, "ghcr.io/atrawog")
+	if meta.Registry != "ghcr.io/overthinkos" {
+		t.Errorf("Registry = %q, want %q", meta.Registry, "ghcr.io/overthinkos")
 	}
 	if meta.UID != 1000 {
 		t.Errorf("UID = %d, want 1000", meta.UID)
