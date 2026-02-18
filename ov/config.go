@@ -79,6 +79,9 @@ type ResolvedImage struct {
 	// Merge configuration
 	Merge *MergeConfig // layer merge settings (nil means use CLI defaults)
 
+	// Auto-generated intermediate image
+	Auto bool // true for auto-generated intermediate images
+
 	// Derived fields
 	IsExternalBase bool   // true if base is external OCI image, false if internal
 	FullTag        string // registry/name:tag

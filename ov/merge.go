@@ -62,7 +62,7 @@ func (c *MergeCmd) runAll(cfg *Config) error {
 	}
 
 	// Merge in dependency order so base images are merged before children
-	order, err := ResolveImageOrder(images, cfg.Defaults.Builder)
+	order, err := ResolveImageOrder(images, nil, cfg.Defaults.Builder)
 	if err != nil {
 		return err
 	}

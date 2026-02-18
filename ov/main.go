@@ -228,13 +228,29 @@ func (c *ListTargetsCmd) Run() error {
 		return err
 	}
 
-	order, err := ResolveImageOrder(images, cfg.Defaults.Builder)
+	layers, err := ScanLayers(dir)
+	if err != nil {
+		return err
+	}
+
+	// Compute intermediates to get full build order
+	images, err = ComputeIntermediates(images, layers, cfg, calverTag)
+	if err != nil {
+		return err
+	}
+
+	order, err := ResolveImageOrder(images, layers, cfg.Defaults.Builder)
 	if err != nil {
 		return err
 	}
 
 	for _, name := range order {
-		fmt.Println(name)
+		img := images[name]
+		if img.Auto {
+			fmt.Printf("%s [auto]\n", name)
+		} else {
+			fmt.Println(name)
+		}
 	}
 	return nil
 }

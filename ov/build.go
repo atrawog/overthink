@@ -40,7 +40,7 @@ func (c *BuildCmd) Run() error {
 	engine := EngineBinary(rt.BuildEngine)
 
 	// Determine build order
-	order, err := ResolveImageOrder(gen.Images, gen.Config.Defaults.Builder)
+	order, err := ResolveImageOrder(gen.Images, gen.Layers, gen.Config.Defaults.Builder)
 	if err != nil {
 		return err
 	}

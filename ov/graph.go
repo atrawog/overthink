@@ -87,10 +87,47 @@ func ResolveLayerOrder(requested []string, layers map[string]*Layer, parentLayer
 	return topoSort(graph)
 }
 
+// ImageNeedsBuilder returns true if any of the image's own resolved layers
+// (excluding parent-provided) have pixi.toml, package.json, or Cargo.toml.
+// When layers is nil, falls back to unconditional builder dependency.
+func ImageNeedsBuilder(img *ResolvedImage, images map[string]*ResolvedImage, layers map[string]*Layer, builderName string) bool {
+	if layers == nil {
+		return true // conservative fallback
+	}
+
+	// Get parent-provided layers
+	var parentLayers map[string]bool
+	if !img.IsExternalBase {
+		var err error
+		parentLayers, err = LayersProvidedByImage(img.Base, images, layers)
+		if err != nil {
+			return true // conservative
+		}
+	}
+
+	// Resolve this image's own layers (excluding parent)
+	resolved, err := ResolveLayerOrder(img.Layers, layers, parentLayers)
+	if err != nil {
+		return true // conservative
+	}
+
+	for _, layerName := range resolved {
+		layer, ok := layers[layerName]
+		if !ok {
+			continue
+		}
+		if layer.PixiManifest() != "" || layer.HasPackageJson || layer.HasCargoToml {
+			return true
+		}
+	}
+	return false
+}
+
 // ResolveImageOrder resolves image dependencies and returns them in build order.
 // Images that reference other images via `base` create dependencies.
-// When builderName is non-empty, all non-builder images depend on the builder.
-func ResolveImageOrder(images map[string]*ResolvedImage, builderName string) ([]string, error) {
+// When builderName is non-empty, images that need multi-stage builds depend on the builder.
+// Pass layers to enable conditional builder dependency; nil for unconditional.
+func ResolveImageOrder(images map[string]*ResolvedImage, layers map[string]*Layer, builderName string) ([]string, error) {
 	// Build adjacency list
 	// Edge from A to B means A depends on B (B must be built before A)
 	graph := make(map[string][]string)
@@ -100,10 +137,12 @@ func ResolveImageOrder(images map[string]*ResolvedImage, builderName string) ([]
 			// base is another image in images.yml
 			deps = append(deps, img.Base)
 		}
-		// Every non-builder image depends on the builder
+		// Only images that need multi-stage builds depend on the builder
 		if builderName != "" && name != builderName {
 			if _, ok := images[builderName]; ok {
-				deps = append(deps, builderName)
+				if ImageNeedsBuilder(img, images, layers, builderName) {
+					deps = append(deps, builderName)
+				}
 			}
 		}
 		graph[name] = deps

@@ -131,7 +131,7 @@ func TestResolveImageOrder(t *testing.T) {
 		},
 	}
 
-	order, err := ResolveImageOrder(images, "")
+	order, err := ResolveImageOrder(images, nil, "")
 	if err != nil {
 		t.Fatalf("ResolveImageOrder() error = %v", err)
 	}
@@ -176,7 +176,7 @@ func TestResolveImageOrderWithBuilder(t *testing.T) {
 		},
 	}
 
-	order, err := ResolveImageOrder(images, "builder")
+	order, err := ResolveImageOrder(images, nil, "builder")
 	if err != nil {
 		t.Fatalf("ResolveImageOrder() error = %v", err)
 	}
@@ -211,7 +211,7 @@ func TestResolveImageOrderCycle(t *testing.T) {
 		"c": {Name: "c", Base: "a", IsExternalBase: false},
 	}
 
-	_, err := ResolveImageOrder(images, "")
+	_, err := ResolveImageOrder(images, nil, "")
 	if err == nil {
 		t.Error("expected cycle error, got nil")
 	}

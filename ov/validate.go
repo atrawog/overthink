@@ -197,7 +197,7 @@ func validateImageDAG(cfg *Config, errs *ValidationError) {
 		return
 	}
 
-	_, err = ResolveImageOrder(images, cfg.Defaults.Builder)
+	_, err = ResolveImageOrder(images, nil, cfg.Defaults.Builder)
 	if err != nil {
 		if cycleErr, ok := err.(*CycleError); ok {
 			errs.Add("image dependency cycle: %s", strings.Join(cycleErr.Cycle, " -> "))

@@ -92,6 +92,13 @@ func NewGenerator(dir string, tag string) (*Generator, error) {
 		return nil, err
 	}
 
+	// Compute and inject auto-intermediate images
+	updated, err := ComputeIntermediates(images, layers, cfg, tag)
+	if err != nil {
+		return nil, fmt.Errorf("computing intermediates: %w", err)
+	}
+	images = updated
+
 	return &Generator{
 		Dir:      dir,
 		Config:   cfg,
@@ -155,7 +162,7 @@ func (g *Generator) Generate() error {
 	}
 
 	// Resolve image build order
-	order, err := ResolveImageOrder(g.Images, builderName)
+	order, err := ResolveImageOrder(g.Images, g.Layers, builderName)
 	if err != nil {
 		return fmt.Errorf("resolving image order: %w", err)
 	}
@@ -258,6 +265,7 @@ func (g *Generator) generateContainerfile(imageName string) error {
 			b.WriteString(fmt.Sprintf("FROM %s AS %s-npm-build\n", builderRef, layerName))
 			b.WriteString(fmt.Sprintf("COPY layers/%s/package.json /tmp/package.json\n", layerName))
 			b.WriteString("WORKDIR /tmp\n")
+			b.WriteString("USER root\n")
 			b.WriteString("ENV NPM_CONFIG_PREFIX=/npm-global\n")
 			b.WriteString("RUN node -e 'var d=require(\"./package.json\").dependencies||{};for(var[n,v]of Object.entries(d))console.log(v===\"*\"?n:n+\"@\"+v)' | xargs npm install -g\n\n")
 		}
