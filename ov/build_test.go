@@ -9,7 +9,7 @@ func TestBuildLocalArgs(t *testing.T) {
 	cmd := &BuildCmd{}
 	args := cmd.buildLocalArgs("docker",
 		[]string{"ghcr.io/overthinkos/fedora:2026.46.1415", "ghcr.io/overthinkos/fedora:latest"},
-		"linux/amd64", "fedora")
+		"linux/amd64", "fedora", "ghcr.io/overthinkos")
 	want := []string{
 		"docker", "build", "-f", "-",
 		"-t", "ghcr.io/overthinkos/fedora:2026.46.1415",
@@ -26,7 +26,7 @@ func TestBuildLocalArgsPodman(t *testing.T) {
 	cmd := &BuildCmd{}
 	args := cmd.buildLocalArgs("podman",
 		[]string{"ghcr.io/overthinkos/fedora:2026.46.1415"},
-		"linux/arm64", "fedora")
+		"linux/arm64", "fedora", "ghcr.io/overthinkos")
 	want := []string{
 		"podman", "build", "-f", "-",
 		"-t", "ghcr.io/overthinkos/fedora:2026.46.1415",
@@ -43,7 +43,7 @@ func TestBuildDockerPushArgs(t *testing.T) {
 	args := cmd.buildDockerPushArgs(
 		[]string{"ghcr.io/overthinkos/fedora:2026.46.1415", "ghcr.io/overthinkos/fedora:latest"},
 		[]string{"linux/amd64", "linux/arm64"},
-		"fedora")
+		"fedora", "ghcr.io/overthinkos")
 	want := []string{
 		"docker", "buildx", "build", "--push", "-f", "-",
 		"-t", "ghcr.io/overthinkos/fedora:2026.46.1415",
@@ -60,7 +60,7 @@ func TestBuildLocalArgsWithGHACache(t *testing.T) {
 	cmd := &BuildCmd{Cache: "gha"}
 	args := cmd.buildLocalArgs("docker",
 		[]string{"ghcr.io/overthinkos/fedora:latest"},
-		"linux/amd64", "fedora")
+		"linux/amd64", "fedora", "ghcr.io/overthinkos")
 	want := []string{
 		"docker", "build", "-f", "-",
 		"-t", "ghcr.io/overthinkos/fedora:latest",
@@ -79,7 +79,7 @@ func TestBuildDockerPushArgsWithGHACache(t *testing.T) {
 	args := cmd.buildDockerPushArgs(
 		[]string{"ghcr.io/overthinkos/fedora:latest"},
 		[]string{"linux/amd64", "linux/arm64"},
-		"fedora")
+		"fedora", "ghcr.io/overthinkos")
 	want := []string{
 		"docker", "buildx", "build", "--push", "-f", "-",
 		"-t", "ghcr.io/overthinkos/fedora:latest",
@@ -90,6 +90,59 @@ func TestBuildDockerPushArgsWithGHACache(t *testing.T) {
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("buildDockerPushArgs(gha) =\n  %v\nwant\n  %v", args, want)
+	}
+}
+
+func TestBuildLocalArgsWithRegistryCache(t *testing.T) {
+	cmd := &BuildCmd{Cache: "registry"}
+	args := cmd.buildLocalArgs("docker",
+		[]string{"ghcr.io/overthinkos/fedora:latest"},
+		"linux/amd64", "fedora", "ghcr.io/overthinkos")
+	want := []string{
+		"docker", "build", "-f", "-",
+		"-t", "ghcr.io/overthinkos/fedora:latest",
+		"--platform", "linux/amd64",
+		"--cache-from", "type=registry,ref=ghcr.io/overthinkos/cache:fedora",
+		"--cache-to", "type=registry,ref=ghcr.io/overthinkos/cache:fedora,mode=max",
+		".",
+	}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("buildLocalArgs(registry) =\n  %v\nwant\n  %v", args, want)
+	}
+}
+
+func TestBuildDockerPushArgsWithRegistryCache(t *testing.T) {
+	cmd := &BuildCmd{Cache: "registry"}
+	args := cmd.buildDockerPushArgs(
+		[]string{"ghcr.io/overthinkos/fedora:latest"},
+		[]string{"linux/amd64", "linux/arm64"},
+		"fedora", "ghcr.io/overthinkos")
+	want := []string{
+		"docker", "buildx", "build", "--push", "-f", "-",
+		"-t", "ghcr.io/overthinkos/fedora:latest",
+		"--platform", "linux/amd64,linux/arm64",
+		"--cache-from", "type=registry,ref=ghcr.io/overthinkos/cache:fedora",
+		"--cache-to", "type=registry,ref=ghcr.io/overthinkos/cache:fedora,mode=max",
+		".",
+	}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("buildDockerPushArgs(registry) =\n  %v\nwant\n  %v", args, want)
+	}
+}
+
+func TestBuildRegistryCacheNoRegistry(t *testing.T) {
+	cmd := &BuildCmd{Cache: "registry"}
+	args := cmd.buildLocalArgs("docker",
+		[]string{"fedora:latest"},
+		"linux/amd64", "fedora", "")
+	want := []string{
+		"docker", "build", "-f", "-",
+		"-t", "fedora:latest",
+		"--platform", "linux/amd64",
+		".",
+	}
+	if !reflect.DeepEqual(args, want) {
+		t.Errorf("buildLocalArgs(registry, no registry) =\n  %v\nwant\n  %v", args, want)
 	}
 }
 
